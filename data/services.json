@@ -1,0 +1,88 @@
+[
+  {
+    "id": 1,
+    "title": "Wedding Events",
+    "price": "₹35,000",
+    "category": "Grand Celebrations",
+    "tag": "Tour-Grade Audio",
+    "description": "Unforgettable Wedding Audio & Staging. Tour-grade sound systems, precision acoustic tuning, and ambient staging tailored to make every vow and song crystal clear.",
+    "image": "https://images.unsplash.com/photo-1597157639073-69284dc0fdaf?q=80&w=1174&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    "features": [
+      "Precision Acoustic Tuning",
+      "Tour-Grade Wireless Sound",
+      "Ambient Staging & Lighting",
+      "Exclusive Sound Director"
+    ],
+    "featuresStr": "Precision Acoustic Tuning\nTour-Grade Wireless Sound\nAmbient Staging & Lighting\nExclusive Sound Director"
+  },
+  {
+    "id": 2,
+    "title": "Goldstar Orchestra",
+    "price": "₹25,000",
+    "category": "Live Orchestration",
+    "tag": "Multi-Genre",
+    "description": "Crafted live orchestral arrangements, high-energy beatmatching, and versatile multi-genre music curation designed to keep your celebration vibrant and unforgettable.",
+    "image": "https://images.unsplash.com/photo-1571266028243-3716f02d2d2e?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Live String & Brass Ensemble",
+      "Multi-Genre Song Curation",
+      "Dynamic Live Beatmatching"
+    ]
+  },
+  {
+    "id": 3,
+    "title": "Lighting & Audio",
+    "price": "₹40,000",
+    "category": "Atmospheric FX",
+    "tag": "Intelligent Lighting",
+    "description": "Intelligent Lighting & Crystal-Clear Sound. Dynamic moving heads, laser shows, and synchronized strobes paired with high-fidelity audio engineering and low-fog atmospheric effects.",
+    "image": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Moving Head Lasers & Strobes",
+      "Synchronized FX & Low-Fog",
+      "Hi-Fi Audio Engineering"
+    ]
+  },
+  {
+    "id": 4,
+    "title": "Welcome Dance",
+    "price": "₹15,000",
+    "category": "Stage Choreography",
+    "tag": "Opening Act",
+    "description": "Vibrant Welcome Dance Performance. Electrifying choreography, custom entrance tracks, and synchronized stage pyrotechnics designed to set an unforgettable opening tone for your guests.",
+    "image": "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Custom Entrance Tracks",
+      "Synchronized Stage Pyros",
+      "Electrifying Choreography"
+    ]
+  },
+  {
+    "id": 5,
+    "title": "DJ Events",
+    "price": "Starting from ₹15,000",
+    "category": "Club & Festival",
+    "tag": "Live Stem Remixing",
+    "description": "Electrifying DJ Events & Festival Beats. Festival-grade audio systems, seamless live stem mixing, and real-time visual synchronization designed to keep your dance floor packed all night.",
+    "image": "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Real-Time Stem Mixing",
+      "Festival-Grade Sound Array",
+      "Synchronized Visuals"
+    ]
+  },
+  {
+    "id": 6,
+    "title": "Instrumentals",
+    "price": "₹10,000",
+    "category": "Acoustic Solo & Band",
+    "tag": "Soulful Live",
+    "description": "Mesmerizing Instrumental Performances. Soulful live solos and ensemble arrangements spanning violin, flute, saxophone, and classical instruments for an elegant, immersive ambiance.",
+    "image": "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Violin, Sax & Flute Solos",
+      "Ensemble Arrangements",
+      "Immersive Classical Ambiance"
+    ]
+  }
+]

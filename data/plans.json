@@ -1,0 +1,207 @@
+[
+  {
+    "id": "starter",
+    "name": "Starter",
+    "badge": "Solo Creators",
+    "desc": "Essential DJ set for private home parties and intimate gatherings.",
+    "monthlyPrice": "₹10,000",
+    "yearlyPrice": "₹10,000",
+    "period": "/ event",
+    "buttonText": "Get Starter",
+    "theme": "standard",
+    "features": [
+      {
+        "text": "3 Hours Live DJ Set",
+        "included": true
+      },
+      {
+        "text": "Basic Sound System (1,000W)",
+        "included": true
+      },
+      {
+        "text": "Standard Playlist Customization",
+        "included": true
+      },
+      {
+        "text": "Dynamic Stage Lighting & FX",
+        "included": false
+      },
+      {
+        "text": "Dedicated Sound Engineer",
+        "included": false
+      },
+      {
+        "text": "Wireless Mic & MC Host",
+        "included": false
+      },
+      {
+        "text": "Custom 3D Visual Projection",
+        "included": false
+      }
+    ]
+  },
+  {
+    "id": "basic",
+    "name": "Basic",
+    "badge": "Club Nights",
+    "desc": "Ideal for medium lounge venues, birthdays, and rooftop parties.",
+    "monthlyPrice": "₹15,000",
+    "yearlyPrice": "₹15,000",
+    "period": "/ event",
+    "buttonText": "Choose Basic",
+    "theme": "standard",
+    "features": [
+      {
+        "text": "5 Hours Live DJ Set",
+        "included": true
+      },
+      {
+        "text": "Pro Sound System (3,000W)",
+        "included": true
+      },
+      {
+        "text": "Standard Playlist Customization",
+        "included": true
+      },
+      {
+        "text": "Dynamic Stage Lighting & FX",
+        "included": true
+      },
+      {
+        "text": "Dedicated Sound Engineer",
+        "included": false
+      },
+      {
+        "text": "Wireless Mic & MC Host",
+        "included": false
+      },
+      {
+        "text": "Custom 3D Visual Projection",
+        "included": false
+      }
+    ]
+  },
+  {
+    "id": "standard",
+    "name": "Standard",
+    "badge": "Corporate Events",
+    "desc": "Complete audio-visual setup for corporate events and weddings.",
+    "monthlyPrice": "₹20,000",
+    "yearlyPrice": "₹20,000",
+    "period": "/ event",
+    "buttonText": "Select Standard",
+    "theme": "standard",
+    "features": [
+      {
+        "text": "7 Hours Live DJ Performance",
+        "included": true
+      },
+      {
+        "text": "High-Impact Concert Sound (5,000W)",
+        "included": true
+      },
+      {
+        "text": "Custom Playlist & Track Edits",
+        "included": true
+      },
+      {
+        "text": "Dynamic Stage Lighting & FX",
+        "included": true
+      },
+      {
+        "text": "Dedicated Sound Engineer",
+        "included": true
+      },
+      {
+        "text": "Wireless Mic & MC Host",
+        "included": false
+      },
+      {
+        "text": "Custom 3D Visual Projection",
+        "included": false
+      }
+    ]
+  },
+  {
+    "id": "premium",
+    "name": "Premium",
+    "badge": "MOST POPULAR",
+    "desc": "Full-scale concert production with silver-grade audio and staging.",
+    "monthlyPrice": "₹25,000",
+    "yearlyPrice": "₹25,000",
+    "period": "/ event",
+    "buttonText": "Upgrade to Premium",
+    "theme": "silver",
+    "features": [
+      {
+        "text": "Full Night Live DJ Set (Up to 10h)",
+        "included": true
+      },
+      {
+        "text": "Tour-Grade Array Sound (10,000W)",
+        "included": true
+      },
+      {
+        "text": "Custom Playlist & Track Edits",
+        "included": true
+      },
+      {
+        "text": "Full Moving-Head Light Show & Fog",
+        "included": true
+      },
+      {
+        "text": "2x Sound & Lighting Engineers",
+        "included": true
+      },
+      {
+        "text": "Dual Wireless Mics & Pro MC",
+        "included": true
+      },
+      {
+        "text": "Custom 3D Visual Projection",
+        "included": false
+      }
+    ]
+  },
+  {
+    "id": "elite",
+    "name": "Elite",
+    "badge": "VIP / FESTIVAL",
+    "desc": "Ultimate festival experience with top-tier gold stage production.",
+    "monthlyPrice": "₹30,000",
+    "yearlyPrice": "₹30,000",
+    "period": "/ event",
+    "buttonText": "Book Elite VIP",
+    "theme": "gold",
+    "features": [
+      {
+        "text": "Unlimited Performance Duration",
+        "included": true
+      },
+      {
+        "text": "Ultra Concert Sound System (25,000W+)",
+        "included": true
+      },
+      {
+        "text": "Exclusive Original Live Remixes & Stems",
+        "included": true
+      },
+      {
+        "text": "Full Laser Show, CO2 Jets & Pyros",
+        "included": true
+      },
+      {
+        "text": "Full Backstage Audio Crew & Director",
+        "included": true
+      },
+      {
+        "text": "Multi-Wireless System & Celebrity MC",
+        "included": true
+      },
+      {
+        "text": "Custom 3D Video Mapping & LED Wall",
+        "included": true
+      }
+    ]
+  }
+]
