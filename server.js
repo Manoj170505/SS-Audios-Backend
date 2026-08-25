@@ -1372,12 +1372,47 @@ app.post('/api/contact', async (req, res) => {
                 </body>
                 </html>
             `
-        };
+        // 3. Dispatch Email: Resend HTTPS API (Port 443 for Railway/Vercel) + Nodemailer SMTP (Localhost)
+        (async () => {
+            const destEmail = process.env.EMAIL_USER || 'manojfa4451e@gmail.com';
+            const resendKey = process.env.RESEND_API_KEY;
+            let sentViaResend = false;
 
-        // 3. Dispatch Email directly via Nodemailer (Gmail)
-        transporter.sendMail(mailOptions)
-            .then(info => console.log(`✅ [Nodemailer] Booking email sent for ${fullName} (${email}) to ${mailOptions.to} (Message ID: ${info.messageId})`))
-            .catch(mailErr => console.error(`❌ [Nodemailer Error]:`, mailErr.message));
+            if (resendKey && resendKey.trim().length > 0) {
+                try {
+                    const resendRes = await fetch('https://api.resend.com/emails', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${resendKey.trim()}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            from: 'Soundscape Inquiries <onboarding@resend.dev>',
+                            to: [destEmail],
+                            reply_to: email,
+                            subject: mailOptions.subject,
+                            html: mailOptions.html
+                        })
+                    });
+                    const resendData = await resendRes.json();
+                    if (resendRes.ok) {
+                        console.log(`✅ [Resend HTTPS] Booking email delivered to ${destEmail} (ID: ${resendData.id})`);
+                        sentViaResend = true;
+                    } else {
+                        console.warn(`⚠️ [Resend Notice]:`, resendData.message || resendData);
+                    }
+                } catch (resendErr) {
+                    console.warn(`⚠️ [Resend Error]:`, resendErr.message);
+                }
+            }
+
+            // Fallback to Nodemailer SMTP (Localhost)
+            if (!sentViaResend) {
+                transporter.sendMail(mailOptions)
+                    .then(info => console.log(`✅ [Nodemailer] Booking email sent for ${fullName} (${email}) to ${mailOptions.to} (Message ID: ${info.messageId})`))
+                    .catch(mailErr => console.error(`❌ [Nodemailer Notice]:`, mailErr.message));
+            }
+        })();
 
         // Return immediate success to user
         return res.json({
