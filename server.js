@@ -1309,11 +1309,13 @@ app.post('/api/inquiries/bulk-delete', async (req, res) => {
 // Contact Form Email & Booking Endpoint (Non-blocking with local + cloud persistence)
 app.post('/api/contact', async (req, res) => {
     try {
-        const { fullName, email, phone, eventType, services, message } = req.body;
+        const { fullName, email, phone, corporateName, eventType, services, message } = req.body;
 
         if (!fullName || !email) {
             return res.status(400).json({ success: false, message: 'Full name and email are required.' });
         }
+
+        const orgName = (corporateName || eventType || 'Corporate / Client Event').trim();
 
         const selectedServices = Array.isArray(services) && services.length > 0
             ? services.join(', ')
@@ -1325,7 +1327,8 @@ app.post('/api/contact', async (req, res) => {
             fullName: fullName.trim(),
             email: email.trim(),
             phone: phone ? phone.trim() : '',
-            eventType: eventType || 'Private Party',
+            corporateName: orgName,
+            eventType: orgName,
             services: Array.isArray(services) ? services : [],
             message: message ? message.trim() : '',
             createdAt: new Date().toISOString(),
@@ -1337,17 +1340,17 @@ app.post('/api/contact', async (req, res) => {
         saveInquiries(currentInquiries);
         await saveInquiryToDb(newInquiry);
 
-        console.log(`📥 [Inquiry Saved] ID: ${newInquiry.id} from ${newInquiry.fullName} (${newInquiry.email})`);
+        console.log(`📥 [Inquiry Saved] ID: ${newInquiry.id} from ${newInquiry.fullName} (${orgName} • ${newInquiry.email})`);
 
         const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
-        const whatsappUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi ${fullName}, thank you for contacting Soundscape! We received your booking inquiry for ${eventType || 'your event'}.`)}` : null;
+        const whatsappUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi ${fullName}, thank you for contacting Soundscape! We received your booking inquiry for ${orgName}.`)}` : null;
 
         // 2. Luxury Dark-Themed HTML Email Template
         const mailOptions = {
             from: `"Soundscape Inquiries" <${process.env.EMAIL_USER || 'ssaudios25@gmail.com'}>`,
             to: process.env.EMAIL_USER || 'ssaudios25@gmail.com',
             replyTo: email,
-            subject: `🎧 [Soundscape Lead] ${eventType || 'Event'} • ${fullName}`,
+            subject: `🎧 [Soundscape Lead] ${orgName} • ${fullName}`,
             html: `
                 <!DOCTYPE html>
                 <html>
@@ -1384,12 +1387,16 @@ app.post('/api/contact', async (req, res) => {
                                     </div>
                                     <div style="text-align: right;">
                                         <span style="display: inline-block; padding: 4px 12px; background: #C3195D; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; border-radius: 8px;">
-                                            ${eventType || 'Event'}
+                                            ${orgName}
                                         </span>
                                     </div>
                                 </div>
 
                                 <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #FAF6F6;">
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #A69B9B; width: 35%; font-weight: 600;">🏢 Corporate / Org:</td>
+                                        <td style="padding: 8px 0; font-weight: bold; color: #FFFFFF;">${orgName}</td>
+                                    </tr>
                                     <tr>
                                         <td style="padding: 8px 0; color: #A69B9B; width: 35%; font-weight: 600;">✉️ Email:</td>
                                         <td style="padding: 8px 0; font-weight: bold;">

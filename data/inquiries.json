@@ -1,5 +1,36 @@
 [
   {
+    "id": "inq_1787655585960_417d8e",
+    "fullName": "Sarah Jenkins",
+    "email": "sarah@globaltech.com",
+    "phone": "9876543210",
+    "corporateName": "Global Tech Innovations Ltd",
+    "eventType": "Global Tech Innovations Ltd",
+    "services": [
+      "Corporate & Collages",
+      "Audios & Lightings",
+      "DJ Events"
+    ],
+    "message": "Annual corporate tech gala sound & lighting inquiry.",
+    "createdAt": "2026-08-25T10:59:45.960Z",
+    "status": "new"
+  },
+  {
+    "id": "inq_1787655298918_eedf7e",
+    "fullName": "Contact Update Test",
+    "email": "test@example.com",
+    "phone": "9876543210",
+    "eventType": "Wedding Celebration",
+    "services": [
+      "Wedding Audio & Staging",
+      "Audios & Lightings",
+      "DJ Events"
+    ],
+    "message": "Testing updated contact services and event types",
+    "createdAt": "2026-08-25T10:54:58.918Z",
+    "status": "new"
+  },
+  {
     "id": "inq_1787651416074_f10246",
     "fullName": "Manoj",
     "email": "manojfa4451e@gmail.com",
