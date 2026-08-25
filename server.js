@@ -21,18 +21,23 @@ const SERVICES_FILE = path.join(DATA_DIR, 'services.json');
 const PLANS_FILE = path.join(DATA_DIR, 'plans.json');
 const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
 
-// Configure Nodemailer Transporter with Gmail & explicit timeouts
+// Configure Nodemailer Transporter with Gmail (Forcing IPv4 & Port 587 for Railway compatibility)
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    port: 587,
+    secure: false,
+    requireTLS: true,
+    family: 4, // Force IPv4 to prevent ENETUNREACH on Railway
     auth: {
         user: process.env.EMAIL_USER || 'manojfa4451e@gmail.com',
         pass: (process.env.EMAIL_PASS || 'jffz nlji ltev ruvr').replace(/\s+/g, ''),
     },
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 8000
+    tls: {
+        rejectUnauthorized: false
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
 });
 
 // Configuration Constants
