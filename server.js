@@ -1323,10 +1323,47 @@ app.post('/api/contact', async (req, res) => {
             `
         };
 
-        // 2. Dispatch Email in background so response returns in < 200ms
-        transporter.sendMail(mailOptions)
-            .then(info => console.log(`✅ [Nodemailer] Booking email sent from ${email} (Message ID: ${info.messageId})`))
-            .catch(mailErr => console.warn(`⚠️ [Nodemailer Notification]: ${mailErr.message}. (Inquiry saved to database/disk successfully).`));
+        // 2. Dispatch Email in background (HTTPS Port 443 Relay + Nodemailer SMTP)
+        (async () => {
+            const destEmail = process.env.EMAIL_USER || 'manojfa4451e@gmail.com';
+            let sent = false;
+
+            // Attempt A: HTTPS Port 443 Relay (Never blocked by Railway)
+            try {
+                const httpRes = await fetch(`https://formsubmit.co/ajax/${destEmail}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Referer': 'https://soundscape-production.web.app/contacts',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+                    },
+                    body: JSON.stringify({
+                        _subject: `🎧 New Booking Request: ${eventType || 'Event'} from ${fullName}`,
+                        'Client Name': fullName,
+                        'Email Address': email,
+                        'Phone Number': phone || 'Not provided',
+                        'Event Type': eventType || 'General Inquiry',
+                        'Selected Services': selectedServices,
+                        'Message Details': message || 'None provided'
+                    })
+                });
+                const httpData = await httpRes.json();
+                if (httpData.success === 'true' || httpData.success === true) {
+                    console.log(`✅ [HTTPS Email Relay] Notification delivered directly to ${destEmail}`);
+                    sent = true;
+                }
+            } catch (httpErr) {
+                console.warn(`[HTTPS Email Relay Warning]:`, httpErr.message);
+            }
+
+            // Attempt B: Nodemailer SMTP
+            if (!sent) {
+                transporter.sendMail(mailOptions)
+                    .then(info => console.log(`✅ [Nodemailer] Booking email sent from ${email} (Message ID: ${info.messageId})`))
+                    .catch(mailErr => console.warn(`⚠️ [Nodemailer Notification]: ${mailErr.message}. (Inquiry saved to database/disk successfully).`));
+            }
+        })();
 
         // Return immediate success to user
         return res.json({
