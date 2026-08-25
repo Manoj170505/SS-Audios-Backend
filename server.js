@@ -1232,6 +1232,40 @@ app.delete('/api/inquiries/:id', async (req, res) => {
     }
 });
 
+// POST bulk delete inquiries
+app.post('/api/inquiries/bulk-delete', async (req, res) => {
+    try {
+        const { ids } = req.body;
+        let currentInquiries = getInquiries();
+
+        if (Array.isArray(ids) && ids.length > 0) {
+            currentInquiries = currentInquiries.filter(inq => !ids.includes(inq.id));
+            if (infrastructureReady) {
+                for (const id of ids) {
+                    try {
+                        await docClient.delete({ TableName: INQUIRIES_TABLE_NAME, Key: { id } }).promise();
+                    } catch (e) {}
+                }
+            }
+        } else {
+            // Delete all
+            if (infrastructureReady) {
+                for (const inq of currentInquiries) {
+                    try {
+                        await docClient.delete({ TableName: INQUIRIES_TABLE_NAME, Key: { id: inq.id } }).promise();
+                    } catch (e) {}
+                }
+            }
+            currentInquiries = [];
+        }
+
+        saveInquiries(currentInquiries);
+        res.json({ success: true, message: 'Inquiries deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to bulk delete inquiries', error: err.message });
+    }
+});
+
 // Contact Form Email & Booking Endpoint (Non-blocking with local + cloud persistence)
 app.post('/api/contact', async (req, res) => {
     try {
