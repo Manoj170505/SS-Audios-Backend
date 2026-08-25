@@ -1275,55 +1275,116 @@ app.post('/api/contact', async (req, res) => {
 
         console.log(`📥 [Inquiry Saved] ID: ${newInquiry.id} from ${newInquiry.fullName} (${newInquiry.email})`);
 
-        // 2. Dispatch Email asynchronously with a 4.5 second timeout to prevent hanging
+        const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+        const whatsappUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi ${fullName}, thank you for contacting Soundscape! We received your booking inquiry for ${eventType || 'your event'}.`)}` : null;
+
+        // 2. Luxury Dark-Themed HTML Email Template
         const mailOptions = {
             from: `"Soundscape Inquiries" <${process.env.EMAIL_USER || 'manojfa4451e@gmail.com'}>`,
             to: process.env.EMAIL_USER || 'manojfa4451e@gmail.com',
             replyTo: email,
-            subject: `🎧 New Booking Request: ${eventType || 'Event'} from ${fullName}`,
+            subject: `🎧 [Soundscape Lead] ${eventType || 'Event'} • ${fullName}`,
             html: `
-                <div style="font-family: Arial, sans-serif; background-color: #141010; color: #FAF6F6; padding: 24px; border-radius: 12px; max-width: 600px; margin: auto; border: 1px solid #C3195D;">
-                    <h2 style="color: #F70776; border-bottom: 2px solid #C3195D; padding-bottom: 8px; margin-top: 0;">
-                        🎧 Soundscape Booking Request
-                    </h2>
-                    <p style="font-size: 15px; color: #FAF6F6;">You received a new booking inquiry through the Soundscape website:</p>
-                    
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 16px; color: #FAF6F6; font-size: 14px;">
-                        <tr style="background-color: #1C1717;">
-                            <td style="padding: 10px; font-weight: bold; width: 35%; color: #A69B9B;">Client Name:</td>
-                            <td style="padding: 10px; color: #FFFFFF; font-weight: bold;">${fullName}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; font-weight: bold; color: #A69B9B;">Email Address:</td>
-                            <td style="padding: 10px;"><a href="mailto:${email}" style="color: #F70776; text-decoration: none;">${email}</a></td>
-                        </tr>
-                        <tr style="background-color: #1C1717;">
-                            <td style="padding: 10px; font-weight: bold; color: #A69B9B;">Phone Number:</td>
-                            <td style="padding: 10px; color: #FFFFFF;">${phone || 'Not provided'}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; font-weight: bold; color: #A69B9B;">Event Type:</td>
-                            <td style="padding: 10px; color: #FFFFFF;">${eventType || 'General Inquiry'}</td>
-                        </tr>
-                        <tr style="background-color: #1C1717;">
-                            <td style="padding: 10px; font-weight: bold; color: #A69B9B;">Required Services:</td>
-                            <td style="padding: 10px; color: #F70776; font-weight: bold;">${selectedServices}</td>
-                        </tr>
-                    </table>
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                </head>
+                <body style="margin: 0; padding: 20px; background-color: #0B0909; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #FAF6F6;">
+                    <div style="max-width: 600px; margin: 0 auto; background: linear-gradient(180deg, #1C1717 0%, #141010 100%); border: 1px solid #2B2323; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+                        
+                        <!-- Top Accent Banner -->
+                        <div style="background: linear-gradient(90deg, #C3195D 0%, #F70776 50%, #C3195D 100%); height: 6px;"></div>
+                        
+                        <!-- Header Section -->
+                        <div style="padding: 28px 28px 20px 28px; text-align: center; border-bottom: 1px solid #2B2323;">
+                            <div style="display: inline-block; padding: 4px 14px; background: rgba(247, 7, 118, 0.15); border: 1px solid rgba(247, 7, 118, 0.4); border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #F70776; margin-bottom: 12px;">
+                                🎧 New Booking Inquiry
+                            </div>
+                            <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; text-transform: uppercase; color: #FAF6F6;">
+                                Soundscape <span style="color: #F70776;">Audios</span>
+                            </h1>
+                            <p style="margin: 6px 0 0 0; font-size: 13px; color: #A69B9B;">
+                                Live Stage, Concert Sound & DJ Production Leads
+                            </p>
+                        </div>
 
-                    <div style="margin-top: 20px; background-color: #1C1717; padding: 16px; border-radius: 8px; border-left: 4px solid #F70776;">
-                        <h4 style="margin: 0 0 8px 0; color: #A69B9B; font-size: 13px; text-transform: uppercase;">Message / Event Details:</h4>
-                        <p style="margin: 0; color: #FAF6F6; line-height: 1.5; font-size: 14px;">${message ? message.replace(/\n/g, '<br/>') : 'No additional message provided.'}</p>
+                        <!-- Client Summary Card -->
+                        <div style="padding: 24px 28px;">
+                            <div style="background: #181414; border: 1px solid #2B2323; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                                    <div>
+                                        <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #A69B9B; letter-spacing: 1px;">Client Name</span>
+                                        <h2 style="margin: 4px 0 0 0; font-size: 22px; font-weight: 800; color: #FFFFFF;">${fullName}</h2>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <span style="display: inline-block; padding: 4px 12px; background: #C3195D; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; border-radius: 8px;">
+                                            ${eventType || 'Event'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #FAF6F6;">
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #A69B9B; width: 35%; font-weight: 600;">✉️ Email:</td>
+                                        <td style="padding: 8px 0; font-weight: bold;">
+                                            <a href="mailto:${email}" style="color: #F70776; text-decoration: none;">${email}</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #A69B9B; font-weight: 600;">📞 Phone:</td>
+                                        <td style="padding: 8px 0; font-weight: bold; color: #FAF6F6;">
+                                            ${phone ? `<a href="tel:${phone}" style="color: #FAF6F6; text-decoration: none;">${phone}</a>` : '<span style="color: #665C5C;">Not provided</span>'}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #A69B9B; font-weight: 600;">⚡ Requested Services:</td>
+                                        <td style="padding: 8px 0; color: #F70776; font-weight: bold;">${selectedServices}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #A69B9B; font-weight: 600;">🕒 Received:</td>
+                                        <td style="padding: 8px 0; color: #A69B9B; font-size: 12px;">${new Date().toLocaleString()}</td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Message Box -->
+                            <div style="background: #141010; border-left: 4px solid #F70776; border-radius: 0 12px 12px 0; padding: 18px; margin-bottom: 24px; border-top: 1px solid #2B2323; border-right: 1px solid #2B2323; border-bottom: 1px solid #2B2323;">
+                                <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #A69B9B; margin-bottom: 8px;">
+                                    📝 Message / Special Requirements:
+                                </div>
+                                <div style="font-size: 14px; line-height: 1.6; color: #E8E0E0; white-space: pre-wrap;">
+                                    ${message ? message.replace(/\n/g, '<br/>') : '<em style="color: #736969;">No additional message specified by client.</em>'}
+                                </div>
+                            </div>
+
+                            <!-- Quick Action Buttons -->
+                            <div style="text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #2B2323;">
+                                ${whatsappUrl ? `
+                                    <a href="${whatsappUrl}" style="display: inline-block; background-color: #25D366; color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
+                                        💬 Reply on WhatsApp
+                                    </a>
+                                ` : ''}
+                                <a href="mailto:${email}?subject=Soundscape%20Booking%20Inquiry%20Response" style="display: inline-block; background: linear-gradient(90deg, #C3195D 0%, #F70776 100%); color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    ✉️ Reply via Email
+                                </a>
+                            </div>
+
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="background: #0F0D0D; padding: 16px 28px; text-align: center; border-top: 1px solid #2B2323; font-size: 11px; color: #665C5C;">
+                            Sent automatically from <strong>Soundscape Web Application</strong> • All rights reserved.
+                        </div>
+
                     </div>
-
-                    <p style="font-size: 12px; color: #A69B9B; margin-top: 24px; border-top: 1px solid #2B2323; padding-top: 12px;">
-                        This email was sent automatically from the Soundscape Web Application. Click reply to respond directly to <strong>${fullName}</strong> (<a href="mailto:${email}" style="color: #F70776;">${email}</a>).
-                    </p>
-                </div>
+                </body>
+                </html>
             `
         };
 
-        // 2. Dispatch Email in background (HTTPS Port 443 Relay + Nodemailer SMTP)
+        // 3. Dispatch Email in background (HTTPS Port 443 Relay + Nodemailer SMTP)
         (async () => {
             const destEmail = process.env.EMAIL_USER || 'manojfa4451e@gmail.com';
             let sent = false;
@@ -1339,13 +1400,16 @@ app.post('/api/contact', async (req, res) => {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
                     },
                     body: JSON.stringify({
-                        _subject: `🎧 New Booking Request: ${eventType || 'Event'} from ${fullName}`,
-                        'Client Name': fullName,
-                        'Email Address': email,
-                        'Phone Number': phone || 'Not provided',
-                        'Event Type': eventType || 'General Inquiry',
-                        'Selected Services': selectedServices,
-                        'Message Details': message || 'None provided'
+                        _subject: `🎧 [Soundscape Lead] ${eventType || 'Event'} • ${fullName}`,
+                        _template: 'table',
+                        _captcha: 'false',
+                        '👤 Client Name': fullName,
+                        '✉️ Email Address': email,
+                        '📞 Phone Number': phone || 'Not provided',
+                        '🎪 Event Type': eventType || 'General Inquiry',
+                        '⚡ Selected Services': selectedServices,
+                        '📝 Message Details': message || 'None provided',
+                        '🕒 Received At': new Date().toLocaleString()
                     })
                 });
                 const httpData = await httpRes.json();
