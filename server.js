@@ -1343,14 +1343,21 @@ app.post('/api/contact', async (req, res) => {
         console.log(`📥 [Inquiry Saved] ID: ${newInquiry.id} from ${newInquiry.fullName} (${orgName} • ${newInquiry.email})`);
 
         const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
-        const whatsappUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi ${fullName}, thank you for contacting Soundscape! We received your booking inquiry for ${orgName}.`)}` : null;
+        const whatsappUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi ${fullName}, thank you for contacting SS Audios! We received your booking inquiry for ${orgName}.`)}` : null;
+
+        // Format timestamp in Indian Standard Time (Asia/Kolkata)
+        const istFormattedTime = new Date().toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            dateStyle: 'full',
+            timeStyle: 'medium'
+        }) + ' IST';
 
         // 2. Luxury Dark-Themed HTML Email Template
         const mailOptions = {
-            from: `"Soundscape Inquiries" <${process.env.EMAIL_USER || 'ssaudios25@gmail.com'}>`,
+            from: `"SS Audios Inquiries" <${process.env.EMAIL_USER || 'ssaudios25@gmail.com'}>`,
             to: process.env.EMAIL_USER || 'ssaudios25@gmail.com',
             replyTo: email,
-            subject: `🎧 [Soundscape Lead] ${orgName} • ${fullName}`,
+            subject: `🎧 [SS Audios Lead] ${orgName} • ${fullName}`,
             html: `
                 <!DOCTYPE html>
                 <html>
@@ -1370,10 +1377,10 @@ app.post('/api/contact', async (req, res) => {
                                 🎧 New Booking Inquiry
                             </div>
                             <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; text-transform: uppercase; color: #FAF6F6;">
-                                Soundscape <span style="color: #F70776;">Audios</span>
+                                SS <span style="color: #F70776;">Audios</span>
                             </h1>
                             <p style="margin: 6px 0 0 0; font-size: 13px; color: #A69B9B;">
-                                Live Stage, Concert Sound & DJ Production Leads
+                                Live Concert Sound, DJ & Stage Production Leads
                             </p>
                         </div>
 
@@ -1414,8 +1421,8 @@ app.post('/api/contact', async (req, res) => {
                                         <td style="padding: 8px 0; color: #F70776; font-weight: bold;">${selectedServices}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 8px 0; color: #A69B9B; font-weight: 600;">🕒 Received:</td>
-                                        <td style="padding: 8px 0; color: #A69B9B; font-size: 12px;">${new Date().toLocaleString()}</td>
+                                        <td style="padding: 8px 0; color: #A69B9B; font-weight: 600;">🕒 Received (IST):</td>
+                                        <td style="padding: 8px 0; color: #FAF6F6; font-size: 12px; font-weight: bold;">${istFormattedTime}</td>
                                     </tr>
                                 </table>
                             </div>
@@ -1437,7 +1444,7 @@ app.post('/api/contact', async (req, res) => {
                                         💬 Reply on WhatsApp
                                     </a>
                                 ` : ''}
-                                <a href="mailto:${email}?subject=Soundscape%20Booking%20Inquiry%20Response" style="display: inline-block; background: linear-gradient(90deg, #C3195D 0%, #F70776 100%); color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <a href="mailto:${email}?subject=SS%20Audios%20Booking%20Inquiry%20Response" style="display: inline-block; background: linear-gradient(90deg, #C3195D 0%, #F70776 100%); color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
                                     ✉️ Reply via Email
                                 </a>
                             </div>
@@ -1446,7 +1453,7 @@ app.post('/api/contact', async (req, res) => {
 
                         <!-- Footer -->
                         <div style="background: #0F0D0D; padding: 16px 28px; text-align: center; border-top: 1px solid #2B2323; font-size: 11px; color: #665C5C;">
-                            Sent automatically from <strong>Soundscape Web Application</strong> • All rights reserved.
+                            Sent automatically from <strong>SS Audios Web Application</strong> • All rights reserved.
                         </div>
 
                     </div>
