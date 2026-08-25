@@ -9,35 +9,22 @@
     "period": "/ event",
     "buttonText": "Get Starter",
     "theme": "standard",
+    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
+    "videos": [
+      "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4"
+    ],
     "features": [
-      {
-        "text": "3 Hours Live DJ Set",
-        "included": true
-      },
-      {
-        "text": "Basic Sound System (1,000W)",
-        "included": true
-      },
-      {
-        "text": "Standard Playlist Customization",
-        "included": true
-      },
-      {
-        "text": "Dynamic Stage Lighting & FX",
-        "included": false
-      },
-      {
-        "text": "Dedicated Sound Engineer",
-        "included": false
-      },
-      {
-        "text": "Wireless Mic & MC Host",
-        "included": false
-      },
-      {
-        "text": "Custom 3D Visual Projection",
-        "included": false
-      }
+      { "text": "3 Hours Live DJ Set", "included": true },
+      { "text": "Basic Sound System (1,000W)", "included": true },
+      { "text": "Standard Playlist Customization", "included": true },
+      { "text": "Dynamic Stage Lighting & FX", "included": false },
+      { "text": "Dedicated Sound Engineer", "included": false },
+      { "text": "Wireless Mic & MC Host", "included": false },
+      { "text": "Custom 3D Visual Projection", "included": false }
     ]
   },
   {
@@ -50,35 +37,22 @@
     "period": "/ event",
     "buttonText": "Choose Basic",
     "theme": "standard",
+    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
+    "videos": [
+      "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4"
+    ],
     "features": [
-      {
-        "text": "5 Hours Live DJ Set",
-        "included": true
-      },
-      {
-        "text": "Pro Sound System (3,000W)",
-        "included": true
-      },
-      {
-        "text": "Standard Playlist Customization",
-        "included": true
-      },
-      {
-        "text": "Dynamic Stage Lighting & FX",
-        "included": true
-      },
-      {
-        "text": "Dedicated Sound Engineer",
-        "included": false
-      },
-      {
-        "text": "Wireless Mic & MC Host",
-        "included": false
-      },
-      {
-        "text": "Custom 3D Visual Projection",
-        "included": false
-      }
+      { "text": "5 Hours Live DJ Set", "included": true },
+      { "text": "Pro Sound System (3,000W)", "included": true },
+      { "text": "Standard Playlist Customization", "included": true },
+      { "text": "Dynamic Stage Lighting & FX", "included": true },
+      { "text": "Dedicated Sound Engineer", "included": false },
+      { "text": "Wireless Mic & MC Host", "included": false },
+      { "text": "Custom 3D Visual Projection", "included": false }
     ]
   },
   {
@@ -91,35 +65,22 @@
     "period": "/ event",
     "buttonText": "Select Standard",
     "theme": "standard",
+    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+    "videos": [
+      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4"
+    ],
     "features": [
-      {
-        "text": "7 Hours Live DJ Performance",
-        "included": true
-      },
-      {
-        "text": "High-Impact Concert Sound (5,000W)",
-        "included": true
-      },
-      {
-        "text": "Custom Playlist & Track Edits",
-        "included": true
-      },
-      {
-        "text": "Dynamic Stage Lighting & FX",
-        "included": true
-      },
-      {
-        "text": "Dedicated Sound Engineer",
-        "included": true
-      },
-      {
-        "text": "Wireless Mic & MC Host",
-        "included": false
-      },
-      {
-        "text": "Custom 3D Visual Projection",
-        "included": false
-      }
+      { "text": "7 Hours Live DJ Performance", "included": true },
+      { "text": "High-Impact Concert Sound (5,000W)", "included": true },
+      { "text": "Custom Playlist & Track Edits", "included": true },
+      { "text": "Dynamic Stage Lighting & FX", "included": true },
+      { "text": "Dedicated Sound Engineer", "included": true },
+      { "text": "Wireless Mic & MC Host", "included": true },
+      { "text": "Custom 3D Visual Projection", "included": false }
     ]
   },
   {
@@ -132,35 +93,22 @@
     "period": "/ event",
     "buttonText": "Upgrade to Premium",
     "theme": "silver",
+    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+    "videos": [
+      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4"
+    ],
     "features": [
-      {
-        "text": "Full Night Live DJ Set (Up to 10h)",
-        "included": true
-      },
-      {
-        "text": "Tour-Grade Array Sound (10,000W)",
-        "included": true
-      },
-      {
-        "text": "Custom Playlist & Track Edits",
-        "included": true
-      },
-      {
-        "text": "Full Moving-Head Light Show & Fog",
-        "included": true
-      },
-      {
-        "text": "2x Sound & Lighting Engineers",
-        "included": true
-      },
-      {
-        "text": "Dual Wireless Mics & Pro MC",
-        "included": true
-      },
-      {
-        "text": "Custom 3D Visual Projection",
-        "included": false
-      }
+      { "text": "Full Night Live DJ Set (Up to 10h)", "included": true },
+      { "text": "Tour-Grade Array Sound (10,000W)", "included": true },
+      { "text": "Custom Playlist & Track Edits", "included": true },
+      { "text": "Full Moving-Head Light Show & Fog", "included": true },
+      { "text": "2x Sound & Lighting Engineers", "included": true },
+      { "text": "Dual Wireless Mics & Pro MC", "included": true },
+      { "text": "Custom 3D Visual Projection", "included": true }
     ]
   },
   {
@@ -173,35 +121,22 @@
     "period": "/ event",
     "buttonText": "Book Elite VIP",
     "theme": "gold",
+    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+    "videos": [
+      "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+      "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4"
+    ],
     "features": [
-      {
-        "text": "Unlimited Performance Duration",
-        "included": true
-      },
-      {
-        "text": "Ultra Concert Sound System (25,000W+)",
-        "included": true
-      },
-      {
-        "text": "Exclusive Original Live Remixes & Stems",
-        "included": true
-      },
-      {
-        "text": "Full Laser Show, CO2 Jets & Pyros",
-        "included": true
-      },
-      {
-        "text": "Full Backstage Audio Crew & Director",
-        "included": true
-      },
-      {
-        "text": "Multi-Wireless System & Celebrity MC",
-        "included": true
-      },
-      {
-        "text": "Custom 3D Video Mapping & LED Wall",
-        "included": true
-      }
+      { "text": "Unlimited Performance Duration", "included": true },
+      { "text": "Ultra Concert Sound System (25,000W+)", "included": true },
+      { "text": "Exclusive Original Live Remixes & Stems", "included": true },
+      { "text": "Full Laser Show, CO2 Jets & Pyros", "included": true },
+      { "text": "Full Backstage Audio Crew & Director", "included": true },
+      { "text": "Multi-Wireless System & Celebrity MC", "included": true },
+      { "text": "Custom 3D Video Mapping & LED Wall", "included": true }
     ]
   }
 ]

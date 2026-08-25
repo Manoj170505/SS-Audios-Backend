@@ -19,17 +19,21 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const SERVICES_FILE = path.join(DATA_DIR, 'services.json');
 const PLANS_FILE = path.join(DATA_DIR, 'plans.json');
+const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
 
-
-// Configure Nodemailer Transporter with Gmail
+// Configure Nodemailer Transporter with Gmail & explicit timeouts
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, '') : '',
-    }
+        user: process.env.EMAIL_USER || 'manojfa4451e@gmail.com',
+        pass: (process.env.EMAIL_PASS || 'jffz nlji ltev ruvr').replace(/\s+/g, ''),
+    },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 8000
 });
-
 
 // Configuration Constants
 const REGION = process.env.AWS_REGION || 'ap-south-1';
@@ -37,6 +41,7 @@ const BUCKET_NAME = process.env.S3_BUCKET_NAME || 'soundscape-media-vault-' + RE
 const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || 'SoundscapeMedia';
 const SERVICES_TABLE_NAME = process.env.DYNAMODB_SERVICES_TABLE || 'SoundscapeServices';
 const PLANS_TABLE_NAME = process.env.DYNAMODB_PLANS_TABLE || 'SoundscapePlans';
+const INQUIRIES_TABLE_NAME = process.env.DYNAMODB_INQUIRIES_TABLE || 'SoundscapeInquiries';
 
 // Middleware
 app.use(cors({
@@ -102,10 +107,11 @@ async function initAWSInfrastructure() {
         }
     }
 
-    // 1. Check & Create DynamoDB Tables (Media, Services, Plans)
+    // 1. Check & Create DynamoDB Tables (Media, Services, Plans, Inquiries)
     await ensureTable(TABLE_NAME, 'id', 'S');
     await ensureTable(SERVICES_TABLE_NAME, 'id', 'S');
     await ensureTable(PLANS_TABLE_NAME, 'id', 'S');
+    await ensureTable(INQUIRIES_TABLE_NAME, 'id', 'S');
 
     // 2. Check & Create S3 Bucket
     try {
@@ -534,6 +540,14 @@ const DEFAULT_PLANS = [
         period: "/ event",
         buttonText: "Get Starter",
         theme: "standard",
+        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
+        videos: [
+            "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4"
+        ],
         features: [
             { text: "3 Hours Live DJ Set", included: true },
             { text: "Basic Sound System (1,000W)", included: true },
@@ -554,6 +568,14 @@ const DEFAULT_PLANS = [
         period: "/ event",
         buttonText: "Choose Basic",
         theme: "standard",
+        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
+        videos: [
+            "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4"
+        ],
         features: [
             { text: "5 Hours Live DJ Set", included: true },
             { text: "Pro Sound System (3,000W)", included: true },
@@ -574,6 +596,14 @@ const DEFAULT_PLANS = [
         period: "/ event",
         buttonText: "Select Standard",
         theme: "standard",
+        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+        videos: [
+            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4"
+        ],
         features: [
             { text: "7 Hours Live DJ Performance", included: true },
             { text: "High-Impact Concert Sound (5,000W)", included: true },
@@ -594,6 +624,14 @@ const DEFAULT_PLANS = [
         period: "/ event",
         buttonText: "Upgrade to Premium",
         theme: "silver",
+        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+        videos: [
+            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4"
+        ],
         features: [
             { text: "Full Night Live DJ Set (Up to 10h)", included: true },
             { text: "Tour-Grade Array Sound (10,000W)", included: true },
@@ -614,6 +652,14 @@ const DEFAULT_PLANS = [
         period: "/ event",
         buttonText: "Book Elite VIP",
         theme: "gold",
+        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+        videos: [
+            "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+            "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4"
+        ],
         features: [
             { text: "Unlimited Performance Duration", included: true },
             { text: "Ultra Concert Sound System (25,000W+)", included: true },
@@ -955,7 +1001,7 @@ app.get('/api/plans', async (req, res) => {
 // POST create a new pricing plan
 app.post('/api/plans', async (req, res) => {
     try {
-        const { id, name, badge, desc, monthlyPrice, yearlyPrice, period, buttonText, theme, features } = req.body;
+        const { id, name, badge, desc, monthlyPrice, yearlyPrice, period, buttonText, theme, features, videoUrl, videos } = req.body;
 
         if (!name) {
             return res.status(400).json({ success: false, message: 'Plan name is required.' });
@@ -974,6 +1020,10 @@ app.post('/api/plans', async (req, res) => {
             period: period ? period.trim() : '/ event',
             buttonText: buttonText ? buttonText.trim() : `Choose ${name.trim()}`,
             theme: theme ? theme.trim() : 'standard',
+            videoUrl: videoUrl ? videoUrl.trim() : "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
+            videos: Array.isArray(videos) && videos.length > 0 ? videos : [
+                videoUrl ? videoUrl.trim() : "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4"
+            ],
             features: Array.isArray(features) ? features : [
                 { text: "Live DJ Performance", included: true },
                 { text: "Pro Sound Array", included: true },
@@ -1095,7 +1145,99 @@ app.post('/api/plans/reset', async (req, res) => {
     }
 });
 
-// Contact Form Email Endpoint
+function getInquiries() {
+    try {
+        if (fs.existsSync(INQUIRIES_FILE)) {
+            const raw = fs.readFileSync(INQUIRIES_FILE, 'utf8');
+            return JSON.parse(raw);
+        }
+    } catch (e) {
+        console.error('Error reading inquiries file:', e);
+    }
+    return [];
+}
+
+function saveInquiries(inquiriesData) {
+    try {
+        fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(inquiriesData, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error('Error saving inquiries file:', e);
+        return false;
+    }
+}
+
+async function saveInquiryToDb(inquiry) {
+    if (infrastructureReady) {
+        try {
+            await docClient.put({
+                TableName: INQUIRIES_TABLE_NAME,
+                Item: inquiry
+            }).promise();
+        } catch (dbErr) {
+            console.warn('[DynamoDB Inquiry Put Error]:', dbErr.message);
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// INQUIRIES REST API
+// -------------------------------------------------------------
+
+// GET all booking inquiries
+app.get('/api/inquiries', async (req, res) => {
+    try {
+        let items = [];
+        if (infrastructureReady) {
+            try {
+                const dbRes = await docClient.scan({ TableName: INQUIRIES_TABLE_NAME }).promise();
+                if (dbRes.Items && dbRes.Items.length > 0) {
+                    items = dbRes.Items;
+                }
+            } catch (err) {
+                console.warn('[DynamoDB Inquiries Scan Warning]:', err.message);
+            }
+        }
+        if (items.length === 0) {
+            items = getInquiries();
+        }
+        items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        res.json({
+            success: true,
+            count: items.length,
+            data: items
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to retrieve inquiries', error: err.message });
+    }
+});
+
+// DELETE an inquiry by ID
+app.delete('/api/inquiries/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const currentInquiries = getInquiries();
+        const filtered = currentInquiries.filter(inq => inq.id !== id);
+        saveInquiries(filtered);
+
+        if (infrastructureReady) {
+            try {
+                await docClient.delete({
+                    TableName: INQUIRIES_TABLE_NAME,
+                    Key: { id }
+                }).promise();
+            } catch (dbErr) {
+                console.warn('[DynamoDB Inquiry Delete Error]:', dbErr.message);
+            }
+        }
+
+        res.json({ success: true, message: 'Inquiry removed successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to delete inquiry', error: err.message });
+    }
+});
+
+// Contact Form Email & Booking Endpoint (Non-blocking with local + cloud persistence)
 app.post('/api/contact', async (req, res) => {
     try {
         const { fullName, email, phone, eventType, services, message } = req.body;
@@ -1108,9 +1250,30 @@ app.post('/api/contact', async (req, res) => {
             ? services.join(', ')
             : 'None specified';
 
+        // 1. Create and persist inquiry immediately
+        const newInquiry = {
+            id: `inq_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+            fullName: fullName.trim(),
+            email: email.trim(),
+            phone: phone ? phone.trim() : '',
+            eventType: eventType || 'Private Party',
+            services: Array.isArray(services) ? services : [],
+            message: message ? message.trim() : '',
+            createdAt: new Date().toISOString(),
+            status: 'new'
+        };
+
+        const currentInquiries = getInquiries();
+        currentInquiries.unshift(newInquiry);
+        saveInquiries(currentInquiries);
+        await saveInquiryToDb(newInquiry);
+
+        console.log(`📥 [Inquiry Saved] ID: ${newInquiry.id} from ${newInquiry.fullName} (${newInquiry.email})`);
+
+        // 2. Dispatch Email asynchronously with a 4.5 second timeout to prevent hanging
         const mailOptions = {
-            from: `"Soundscape Inquiries" <${process.env.EMAIL_USER}>`,
-            to: process.env.EMAIL_USER,
+            from: `"Soundscape Inquiries" <${process.env.EMAIL_USER || 'manojfa4451e@gmail.com'}>`,
+            to: process.env.EMAIL_USER || 'manojfa4451e@gmail.com',
             replyTo: email,
             subject: `🎧 New Booking Request: ${eventType || 'Event'} from ${fullName}`,
             html: `
@@ -1155,19 +1318,27 @@ app.post('/api/contact', async (req, res) => {
             `
         };
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ [Nodemailer] Booking email sent from ${email} (Message ID: ${info.messageId})`);
+        const emailPromise = transporter.sendMail(mailOptions);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 4500));
 
-        res.json({
+        try {
+            const info = await Promise.race([emailPromise, timeoutPromise]);
+            console.log(`✅ [Nodemailer] Booking email sent from ${email} (Message ID: ${info.messageId})`);
+        } catch (mailErr) {
+            console.warn(`⚠️ [Nodemailer Notification]: ${mailErr.message}. (Inquiry saved to database/disk successfully).`);
+        }
+
+        // Return immediate success to user
+        return res.json({
             success: true,
-            message: 'Your booking request has been sent successfully!',
-            messageId: info.messageId
+            message: 'Thank you! Your booking request has been delivered to our team.',
+            inquiryId: newInquiry.id
         });
     } catch (err) {
-        console.error('❌ [Nodemailer] Error sending contact email:', err);
+        console.error('❌ Error handling contact request:', err);
         res.status(500).json({
             success: false,
-            message: 'Failed to send message via email server.',
+            message: 'Failed to record booking request. Please try again.',
             error: err.message
         });
     }
