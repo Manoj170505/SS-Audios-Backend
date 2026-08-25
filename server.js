@@ -1270,8 +1270,8 @@ app.post('/api/contact', async (req, res) => {
 
         // 2. Luxury Dark-Themed HTML Email Template
         const mailOptions = {
-            from: `"Soundscape Inquiries" <${process.env.EMAIL_USER || 'manojfa4451e@gmail.com'}>`,
-            to: process.env.EMAIL_USER || 'manojfa4451e@gmail.com',
+            from: `"Soundscape Inquiries" <${process.env.EMAIL_USER || 'ssaudios25@gmail.com'}>`,
+            to: process.env.EMAIL_USER || 'ssaudios25@gmail.com',
             replyTo: email,
             subject: `🎧 [Soundscape Lead] ${eventType || 'Event'} • ${fullName}`,
             html: `
