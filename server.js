@@ -25,8 +25,8 @@ const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.EMAIL_USER || 'manojfa4451e@gmail.com',
-        pass: (process.env.EMAIL_PASS || 'jffz nlji ltev ruvr').replace(/\s+/g, ''),
+        user: process.env.EMAIL_USER || 'ssaudios25@gmail.com',
+        pass: (process.env.EMAIL_PASS || 'xqkb yzfd tund wlgp').replace(/\s+/g, ''),
     }
 });
 
@@ -1372,9 +1372,11 @@ app.post('/api/contact', async (req, res) => {
                 </body>
                 </html>
             `
+        };
+
         // 3. Dispatch Email: Resend HTTPS API (Port 443 for Railway/Vercel) + Nodemailer SMTP (Localhost)
         (async () => {
-            const destEmail = process.env.EMAIL_USER || 'manojfa4451e@gmail.com';
+            const destEmail = process.env.EMAIL_USER || 'ssaudios25@gmail.com';
             const resendKey = process.env.RESEND_API_KEY;
             let sentViaResend = false;
 
