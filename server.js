@@ -1318,15 +1318,10 @@ app.post('/api/contact', async (req, res) => {
             `
         };
 
-        const emailPromise = transporter.sendMail(mailOptions);
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 4500));
-
-        try {
-            const info = await Promise.race([emailPromise, timeoutPromise]);
-            console.log(`✅ [Nodemailer] Booking email sent from ${email} (Message ID: ${info.messageId})`);
-        } catch (mailErr) {
-            console.warn(`⚠️ [Nodemailer Notification]: ${mailErr.message}. (Inquiry saved to database/disk successfully).`);
-        }
+        // 2. Dispatch Email in background so response returns in < 200ms
+        transporter.sendMail(mailOptions)
+            .then(info => console.log(`✅ [Nodemailer] Booking email sent from ${email} (Message ID: ${info.messageId})`))
+            .catch(mailErr => console.warn(`⚠️ [Nodemailer Notification]: ${mailErr.message}. (Inquiry saved to database/disk successfully).`));
 
         // Return immediate success to user
         return res.json({
