@@ -1,142 +1,217 @@
 [
   {
-    "id": "starter",
-    "name": "Starter",
-    "badge": "Solo Creators",
-    "desc": "Essential DJ set for private home parties and intimate gatherings.",
-    "monthlyPrice": "₹10,000",
-    "yearlyPrice": "₹10,000",
-    "period": "/ event",
-    "buttonText": "Get Starter",
     "theme": "standard",
-    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
-    "videos": [
-      "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4"
-    ],
-    "features": [
-      { "text": "3 Hours Live DJ Set", "included": true },
-      { "text": "Basic Sound System (1,000W)", "included": true },
-      { "text": "Standard Playlist Customization", "included": true },
-      { "text": "Dynamic Stage Lighting & FX", "included": false },
-      { "text": "Dedicated Sound Engineer", "included": false },
-      { "text": "Wireless Mic & MC Host", "included": false },
-      { "text": "Custom 3D Visual Projection", "included": false }
-    ]
-  },
-  {
-    "id": "basic",
-    "name": "Basic",
-    "badge": "Club Nights",
-    "desc": "Ideal for medium lounge venues, birthdays, and rooftop parties.",
-    "monthlyPrice": "₹15,000",
-    "yearlyPrice": "₹15,000",
+    "yearlyPrice": "₹20,000",
+    "buttonText": "Select Standard",
+    "badge": "Corporate Events",
     "period": "/ event",
-    "buttonText": "Choose Basic",
-    "theme": "standard",
-    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
-    "videos": [
-      "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4"
-    ],
-    "features": [
-      { "text": "5 Hours Live DJ Set", "included": true },
-      { "text": "Pro Sound System (3,000W)", "included": true },
-      { "text": "Standard Playlist Customization", "included": true },
-      { "text": "Dynamic Stage Lighting & FX", "included": true },
-      { "text": "Dedicated Sound Engineer", "included": false },
-      { "text": "Wireless Mic & MC Host", "included": false },
-      { "text": "Custom 3D Visual Projection", "included": false }
-    ]
-  },
-  {
     "id": "standard",
     "name": "Standard",
-    "badge": "Corporate Events",
-    "desc": "Complete audio-visual setup for corporate events and weddings.",
     "monthlyPrice": "₹20,000",
-    "yearlyPrice": "₹20,000",
-    "period": "/ event",
-    "buttonText": "Select Standard",
+    "features": [
+      {
+        "included": true,
+        "text": "7 Hours Live DJ Performance"
+      },
+      {
+        "included": true,
+        "text": "High-Impact Concert Sound (5,000W)"
+      },
+      {
+        "included": true,
+        "text": "Custom Playlist & Track Edits"
+      },
+      {
+        "included": true,
+        "text": "Dynamic Stage Lighting & FX"
+      },
+      {
+        "included": true,
+        "text": "Dedicated Sound Engineer"
+      },
+      {
+        "included": false,
+        "text": "Wireless Mic & MC Host"
+      },
+      {
+        "included": false,
+        "text": "Custom 3D Visual Projection"
+      },
+      {
+        "included": true,
+        "text": "Dj iincluded"
+      }
+    ],
+    "desc": "Complete audio-visual setup for corporate events and weddings."
+  },
+  {
     "theme": "standard",
-    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
+    "videoUrl": "https://soundscape-media-vault-ap-south-1.s3.ap-south-1.amazonaws.com/media/1787300729187-ddeb6ed5-Screen_Recording_2026-08-16_203944.mp4",
+    "yearlyPrice": "₹15,000",
     "videos": [
-      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4"
+      "https://soundscape-media-vault-ap-south-1.s3.ap-south-1.amazonaws.com/media/1787300729187-ddeb6ed5-Screen_Recording_2026-08-16_203944.mp4",
+      "",
+      "https://soundscape-media-vault-ap-south-1.s3.ap-south-1.amazonaws.com/media/1787300729187-ddeb6ed5-Screen_Recording_2026-08-16_203944.mp4"
     ],
-    "features": [
-      { "text": "7 Hours Live DJ Performance", "included": true },
-      { "text": "High-Impact Concert Sound (5,000W)", "included": true },
-      { "text": "Custom Playlist & Track Edits", "included": true },
-      { "text": "Dynamic Stage Lighting & FX", "included": true },
-      { "text": "Dedicated Sound Engineer", "included": true },
-      { "text": "Wireless Mic & MC Host", "included": true },
-      { "text": "Custom 3D Visual Projection", "included": false }
-    ]
-  },
-  {
-    "id": "premium",
-    "name": "Premium",
-    "badge": "MOST POPULAR",
-    "desc": "Full-scale concert production with silver-grade audio and staging.",
-    "monthlyPrice": "₹25,000",
-    "yearlyPrice": "₹25,000",
+    "buttonText": "Choose Basic",
+    "badge": "Club Nights",
     "period": "/ event",
-    "buttonText": "Upgrade to Premium",
-    "theme": "silver",
-    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-    "videos": [
-      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4"
-    ],
+    "id": "basic",
+    "name": "Basic",
+    "monthlyPrice": "₹15,000",
     "features": [
-      { "text": "Full Night Live DJ Set (Up to 10h)", "included": true },
-      { "text": "Tour-Grade Array Sound (10,000W)", "included": true },
-      { "text": "Custom Playlist & Track Edits", "included": true },
-      { "text": "Full Moving-Head Light Show & Fog", "included": true },
-      { "text": "2x Sound & Lighting Engineers", "included": true },
-      { "text": "Dual Wireless Mics & Pro MC", "included": true },
-      { "text": "Custom 3D Visual Projection", "included": true }
-    ]
+      {
+        "included": true,
+        "text": "5 Hours Live DJ Set"
+      },
+      {
+        "included": true,
+        "text": "Pro Sound System (3,000W)"
+      },
+      {
+        "included": true,
+        "text": "Standard Playlist Customization"
+      },
+      {
+        "included": true,
+        "text": "Dynamic Stage Lighting & FX"
+      },
+      {
+        "text": "Dedicated Sound Engineer",
+        "included": false
+      },
+      {
+        "included": false,
+        "text": "Wireless Mic & MC Host"
+      },
+      {
+        "text": "Custom 3D Visual Projection",
+        "included": false
+      }
+    ],
+    "desc": "Ideal for medium lounge venues, birthdays, and rooftop parties."
   },
   {
+    "theme": "gold",
+    "yearlyPrice": "₹30,000",
+    "buttonText": "Book Elite VIP",
+    "badge": "VIP / FESTIVAL",
+    "period": "/ event",
     "id": "elite",
     "name": "Elite",
-    "badge": "VIP / FESTIVAL",
-    "desc": "Ultimate festival experience with top-tier gold stage production.",
     "monthlyPrice": "₹30,000",
-    "yearlyPrice": "₹30,000",
-    "period": "/ event",
-    "buttonText": "Book Elite VIP",
-    "theme": "gold",
-    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-    "videos": [
-      "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-      "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4"
-    ],
     "features": [
-      { "text": "Unlimited Performance Duration", "included": true },
-      { "text": "Ultra Concert Sound System (25,000W+)", "included": true },
-      { "text": "Exclusive Original Live Remixes & Stems", "included": true },
-      { "text": "Full Laser Show, CO2 Jets & Pyros", "included": true },
-      { "text": "Full Backstage Audio Crew & Director", "included": true },
-      { "text": "Multi-Wireless System & Celebrity MC", "included": true },
-      { "text": "Custom 3D Video Mapping & LED Wall", "included": true }
-    ]
+      {
+        "included": true,
+        "text": "Unlimited Performance Duration"
+      },
+      {
+        "included": true,
+        "text": "Ultra Concert Sound System (25,000W+)"
+      },
+      {
+        "included": true,
+        "text": "Exclusive Original Live Remixes & Stems"
+      },
+      {
+        "included": true,
+        "text": "Full Laser Show, CO2 Jets & Pyros"
+      },
+      {
+        "included": true,
+        "text": "Full Backstage Audio Crew & Director"
+      },
+      {
+        "included": true,
+        "text": "Multi-Wireless System & Celebrity MC"
+      },
+      {
+        "included": true,
+        "text": "Custom 3D Video Mapping & LED Wall"
+      }
+    ],
+    "desc": "Ultimate festival experience with top-tier gold stage production."
+  },
+  {
+    "theme": "standard",
+    "yearlyPrice": "₹10,000",
+    "buttonText": "Get Starter",
+    "badge": "Solo Creators",
+    "period": "/ event",
+    "id": "starter",
+    "name": "Starter",
+    "monthlyPrice": "₹10,000",
+    "features": [
+      {
+        "included": true,
+        "text": "3 Hours Live DJ Set"
+      },
+      {
+        "included": true,
+        "text": "Basic Sound System (1,000W)"
+      },
+      {
+        "included": true,
+        "text": "Standard Playlist Customization"
+      },
+      {
+        "included": false,
+        "text": "Dynamic Stage Lighting & FX"
+      },
+      {
+        "included": false,
+        "text": "Dedicated Sound Engineer"
+      },
+      {
+        "included": false,
+        "text": "Wireless Mic & MC Host"
+      },
+      {
+        "included": false,
+        "text": "Custom 3D Visual Projection"
+      }
+    ],
+    "desc": "Essential DJ set for private home parties and intimate gatherings."
+  },
+  {
+    "theme": "silver",
+    "yearlyPrice": "₹25,000",
+    "buttonText": "Upgrade to Premium",
+    "badge": "MOST POPULAR",
+    "period": "/ event",
+    "id": "premium",
+    "name": "Premium",
+    "monthlyPrice": "₹25,000",
+    "features": [
+      {
+        "included": true,
+        "text": "Full Night Live DJ Set (Up to 10h)"
+      },
+      {
+        "included": true,
+        "text": "Tour-Grade Array Sound (10,000W)"
+      },
+      {
+        "included": true,
+        "text": "Custom Playlist & Track Edits"
+      },
+      {
+        "included": true,
+        "text": "Full Moving-Head Light Show & Fog"
+      },
+      {
+        "included": true,
+        "text": "2x Sound & Lighting Engineers"
+      },
+      {
+        "included": true,
+        "text": "Dual Wireless Mics & Pro MC"
+      },
+      {
+        "included": false,
+        "text": "Custom 3D Visual Projection"
+      }
+    ],
+    "desc": "Full-scale concert production with silver-grade audio and staging."
   }
 ]

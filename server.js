@@ -46,6 +46,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(DATA_DIR, 'uploads')));
 
 // Configure Multer for memory storage (max 100MB per file)
 const storage = multer.memoryStorage();
@@ -205,6 +206,56 @@ app.get('/api/media', async (req, res) => {
             message: 'Failed to fetch media records',
             error: err.message
         });
+    }
+});
+
+// POST general file upload (for Services, Plans, and direct media upload)
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file provided.' });
+        }
+
+        const sanitizedOriginalName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const s3Key = `uploads/${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${sanitizedOriginalName}`;
+        let fileUrl = '';
+
+        if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+            try {
+                const uploadParams = {
+                    Bucket: BUCKET_NAME,
+                    Key: s3Key,
+                    Body: req.file.buffer,
+                    ContentType: req.file.mimetype,
+                };
+                const s3Result = await s3.upload(uploadParams).promise();
+                fileUrl = s3Result.Location;
+            } catch (s3Err) {
+                console.warn('[S3 Direct Upload Warning]:', s3Err.message);
+            }
+        }
+
+        // Local fallback if S3 not reached or error
+        if (!fileUrl) {
+            const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+            if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+            const localFileName = `${Date.now()}-${sanitizedOriginalName}`;
+            const localFilePath = path.join(UPLOADS_DIR, localFileName);
+            fs.writeFileSync(localFilePath, req.file.buffer);
+            fileUrl = `/uploads/${localFileName}`;
+        }
+
+        res.json({
+            success: true,
+            message: 'File uploaded successfully',
+            url: fileUrl,
+            fileName: req.file.originalname,
+            fileSize: req.file.size,
+            mimeType: req.file.mimetype
+        });
+    } catch (err) {
+        console.error('Error in general upload:', err);
+        res.status(500).json({ success: false, message: 'Failed to upload file', error: err.message });
     }
 });
 
@@ -454,8 +505,6 @@ const DEFAULT_SERVICES = [
         id: 1,
         title: "Wedding Events",
         price: "₹25,000",
-        category: "Grand Celebrations",
-        tag: "Tour-Grade Audio",
         description:
             "Unforgettable Wedding Audio & Staging. Tour-grade sound systems, precision acoustic tuning, and ambient staging tailored to make every vow and song crystal clear.",
         image:
@@ -466,8 +515,6 @@ const DEFAULT_SERVICES = [
         id: 2,
         title: "Goldstar Orchestra",
         price: "₹25,000",
-        category: "Live Orchestration",
-        tag: "Multi-Genre",
         description:
             "Crafted live orchestral arrangements, high-energy beatmatching, and versatile multi-genre music curation designed to keep your celebration vibrant and unforgettable.",
         image:
@@ -478,8 +525,6 @@ const DEFAULT_SERVICES = [
         id: 3,
         title: "Lighting & Audio",
         price: "₹40,000",
-        category: "Atmospheric FX",
-        tag: "Intelligent Lighting",
         description:
             "Intelligent Lighting & Crystal-Clear Sound. Dynamic moving heads, laser shows, and synchronized strobes paired with high-fidelity audio engineering and low-fog atmospheric effects.",
         image:
@@ -490,8 +535,6 @@ const DEFAULT_SERVICES = [
         id: 4,
         title: "Welcome Dance",
         price: "₹15,000",
-        category: "Stage Choreography",
-        tag: "Opening Act",
         description:
             "Vibrant Welcome Dance Performance. Electrifying choreography, custom entrance tracks, and synchronized stage pyrotechnics designed to set an unforgettable opening tone for your guests.",
         image:
@@ -502,8 +545,6 @@ const DEFAULT_SERVICES = [
         id: 5,
         title: "DJ Events",
         price: "Starting from ₹15,000",
-        category: "Club & Festival",
-        tag: "Live Stem Remixing",
         description:
             "Electrifying DJ Events & Festival Beats. Festival-grade audio systems, seamless live stem mixing, and real-time visual synchronization designed to keep your dance floor packed all night.",
         image:
@@ -514,8 +555,6 @@ const DEFAULT_SERVICES = [
         id: 6,
         title: "Instrumentals",
         price: "₹10,000",
-        category: "Acoustic Solo & Band",
-        tag: "Soulful Live",
         description:
             "Mesmerizing Instrumental Performances. Soulful live solos and ensemble arrangements spanning violin, flute, saxophone, and classical instruments for an elegant, immersive ambiance.",
         image:
@@ -530,8 +569,8 @@ const DEFAULT_PLANS = [
         name: "Starter",
         badge: "Solo Creators",
         desc: "Essential DJ set for private home parties and intimate gatherings.",
+        price: "$199",
         monthlyPrice: "$199",
-        yearlyPrice: "$159",
         period: "/ event",
         buttonText: "Get Starter",
         theme: "standard",
@@ -558,8 +597,8 @@ const DEFAULT_PLANS = [
         name: "Basic",
         badge: "Club Nights",
         desc: "Ideal for medium lounge venues, birthdays, and rooftop parties.",
+        price: "$399",
         monthlyPrice: "$399",
-        yearlyPrice: "$319",
         period: "/ event",
         buttonText: "Choose Basic",
         theme: "standard",
@@ -586,8 +625,8 @@ const DEFAULT_PLANS = [
         name: "Standard",
         badge: "Corporate Events",
         desc: "Complete audio-visual setup for corporate events and weddings.",
+        price: "$699",
         monthlyPrice: "$699",
-        yearlyPrice: "$559",
         period: "/ event",
         buttonText: "Select Standard",
         theme: "standard",
@@ -614,8 +653,8 @@ const DEFAULT_PLANS = [
         name: "Premium",
         badge: "MOST POPULAR",
         desc: "Full-scale concert production with silver-grade audio and staging.",
+        price: "$1,299",
         monthlyPrice: "$1,299",
-        yearlyPrice: "$1,039",
         period: "/ event",
         buttonText: "Upgrade to Premium",
         theme: "silver",
@@ -642,8 +681,8 @@ const DEFAULT_PLANS = [
         name: "Elite",
         badge: "VIP / FESTIVAL",
         desc: "Ultimate festival experience with top-tier gold stage production.",
+        price: "$2,499",
         monthlyPrice: "$2,499",
-        yearlyPrice: "$1,999",
         period: "/ event",
         buttonText: "Book Elite VIP",
         theme: "gold",
@@ -657,12 +696,12 @@ const DEFAULT_PLANS = [
         ],
         features: [
             { text: "Unlimited Performance Duration", included: true },
-            { text: "Ultra Concert Sound System (25,000W+)", included: true },
-            { text: "Exclusive Original Live Remixes & Stems", included: true },
-            { text: "Full Laser Show, CO2 Jets & Pyros", included: true },
-            { text: "Full Backstage Audio Crew & Director", included: true },
-            { text: "Multi-Wireless System & Celebrity MC", included: true },
-            { text: "Custom 3D Video Mapping & LED Wall", included: true },
+            { text: "Full Line-Array Sound & Subs (25,000W)", included: true },
+            { text: "Fully Customized Live Visuals & Pyros", included: true },
+            { text: "Full Crew of Sound & Visual Directors", included: true },
+            { text: "Multi-Zone Wireless Sound & VIP Monitoring", included: true },
+            { text: "Live Instrument & DJ Collab Set", included: true },
+            { text: "Custom 3D Visual Projection", included: true },
         ],
     },
 ];
@@ -996,7 +1035,7 @@ app.get('/api/plans', async (req, res) => {
 // POST create a new pricing plan
 app.post('/api/plans', async (req, res) => {
     try {
-        const { id, name, badge, desc, monthlyPrice, yearlyPrice, period, buttonText, theme, features, videoUrl, videos } = req.body;
+        const { id, name, badge, desc, price, monthlyPrice, period, buttonText, theme, features, videoUrl, videos } = req.body;
 
         if (!name) {
             return res.status(400).json({ success: false, message: 'Plan name is required.' });
@@ -1004,14 +1043,15 @@ app.post('/api/plans', async (req, res) => {
 
         const planId = (id || name).toLowerCase().replace(/[^a-z0-9]/g, '-');
         const currentPlans = getPlans();
+        const planPrice = (price || monthlyPrice || '$499').trim();
 
         const newPlan = {
             id: planId,
             name: name.trim(),
             badge: badge ? badge.trim() : 'SPECIAL TIER',
             desc: desc ? desc.trim() : '',
-            monthlyPrice: monthlyPrice ? monthlyPrice.trim() : '$499',
-            yearlyPrice: yearlyPrice ? yearlyPrice.trim() : '$399',
+            price: planPrice,
+            monthlyPrice: planPrice,
             period: period ? period.trim() : '/ event',
             buttonText: buttonText ? buttonText.trim() : `Choose ${name.trim()}`,
             theme: theme ? theme.trim() : 'standard',
