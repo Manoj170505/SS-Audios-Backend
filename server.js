@@ -21,23 +21,13 @@ const SERVICES_FILE = path.join(DATA_DIR, 'services.json');
 const PLANS_FILE = path.join(DATA_DIR, 'plans.json');
 const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
 
-// Configure Nodemailer Transporter with Gmail (Forcing IPv4 & Port 587 for Railway compatibility)
+// Configure Nodemailer Transporter with Gmail
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    requireTLS: true,
-    family: 4, // Force IPv4 to prevent ENETUNREACH on Railway
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER || 'manojfa4451e@gmail.com',
         pass: (process.env.EMAIL_PASS || 'jffz nlji ltev ruvr').replace(/\s+/g, ''),
-    },
-    tls: {
-        rejectUnauthorized: false
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000
+    }
 });
 
 // Configuration Constants
@@ -1384,50 +1374,10 @@ app.post('/api/contact', async (req, res) => {
             `
         };
 
-        // 3. Dispatch Email in background (HTTPS Port 443 Relay + Nodemailer SMTP)
-        (async () => {
-            const destEmail = process.env.EMAIL_USER || 'manojfa4451e@gmail.com';
-            let sent = false;
-
-            // Attempt A: HTTPS Port 443 Relay (Never blocked by Railway)
-            try {
-                const httpRes = await fetch(`https://formsubmit.co/ajax/${destEmail}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'Referer': 'https://soundscape-production.web.app/contacts',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-                    },
-                    body: JSON.stringify({
-                        _subject: `🎧 [Soundscape Lead] ${eventType || 'Event'} • ${fullName}`,
-                        _template: 'table',
-                        _captcha: 'false',
-                        '👤 Client Name': fullName,
-                        '✉️ Email Address': email,
-                        '📞 Phone Number': phone || 'Not provided',
-                        '🎪 Event Type': eventType || 'General Inquiry',
-                        '⚡ Selected Services': selectedServices,
-                        '📝 Message Details': message || 'None provided',
-                        '🕒 Received At': new Date().toLocaleString()
-                    })
-                });
-                const httpData = await httpRes.json();
-                if (httpData.success === 'true' || httpData.success === true) {
-                    console.log(`✅ [HTTPS Email Relay] Notification delivered directly to ${destEmail}`);
-                    sent = true;
-                }
-            } catch (httpErr) {
-                console.warn(`[HTTPS Email Relay Warning]:`, httpErr.message);
-            }
-
-            // Attempt B: Nodemailer SMTP
-            if (!sent) {
-                transporter.sendMail(mailOptions)
-                    .then(info => console.log(`✅ [Nodemailer] Booking email sent from ${email} (Message ID: ${info.messageId})`))
-                    .catch(mailErr => console.warn(`⚠️ [Nodemailer Notification]: ${mailErr.message}. (Inquiry saved to database/disk successfully).`));
-            }
-        })();
+        // 3. Dispatch Email directly via Nodemailer (Gmail)
+        transporter.sendMail(mailOptions)
+            .then(info => console.log(`✅ [Nodemailer] Booking email sent for ${fullName} (${email}) to ${mailOptions.to} (Message ID: ${info.messageId})`))
+            .catch(mailErr => console.error(`❌ [Nodemailer Error]:`, mailErr.message));
 
         // Return immediate success to user
         return res.json({
