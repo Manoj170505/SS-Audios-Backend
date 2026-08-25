@@ -1,0 +1,43 @@
+[
+  {
+    "id": "inq_1787646878723_75bc67",
+    "fullName": "Manoj",
+    "email": "manojfa4451e@gmail.com",
+    "phone": "08122084966",
+    "eventType": "Private Party",
+    "services": [
+      "Live DJ Set"
+    ],
+    "message": "yrdufgkglih",
+    "createdAt": "2026-08-25T08:34:38.723Z",
+    "status": "new"
+  },
+  {
+    "id": "inq_1787645942259_0c9bd4",
+    "fullName": "Manoj",
+    "email": "manojfa4451e@gmail.com",
+    "phone": "08122084966",
+    "eventType": "Private Party",
+    "services": [
+      "Live DJ Set"
+    ],
+    "message": "sytdutiyfigiu",
+    "createdAt": "2026-08-25T08:19:02.259Z",
+    "status": "new"
+  },
+  {
+    "id": "inq_1787645413706_bf0b35",
+    "fullName": "Direct Local Server Test",
+    "email": "test.client@example.com",
+    "phone": "+18005550199",
+    "eventType": "Private VIP Party",
+    "services": [
+      "Live DJ Set",
+      "Sound Setup",
+      "Lighting & FX"
+    ],
+    "message": "Testing full end-to-end Nodemailer email delivery from local Express server!",
+    "createdAt": "2026-08-25T08:10:13.706Z",
+    "status": "new"
+  }
+]
