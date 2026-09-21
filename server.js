@@ -561,6 +561,46 @@ const DEFAULT_SERVICES = [
             "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&q=80&w=600",
         features: ["Violin, Sax & Flute Solos", "Ensemble Arrangements", "Immersive Classical Ambiance"],
     },
+    {
+        id: 7,
+        title: "Raga Studio - Plug & Play",
+        price: "₹1,500 / hr",
+        category: "Raga Studio",
+        tag: "Studio Recording",
+        description: "Zero-latency acoustic jamming, live recording, and high-end preamps ready for instant plug-and-play sessions.",
+        image: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
+        features: ["Zero-Latency Monitoring", "High-End Preamps", "Instant Multi-Track Export"]
+    },
+    {
+        id: 8,
+        title: "Raga Studio - Vocal Training & Mixing",
+        price: "₹2,500 / session",
+        category: "Raga Studio",
+        tag: "Voice & Production",
+        description: "Acoustically isolated vocal booth coaching, pitch tuning, dynamic mastering, and professional audio production.",
+        image: "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&q=80&w=600",
+        features: ["Real-Time Pitch Feedback", "Vocal Tuning & De-Essing", "Stem Master Delivery"]
+    },
+    {
+        id: 9,
+        title: "Raga Studio - Greenmate & Youtubers Suite",
+        price: "₹2,000 / hr",
+        category: "Raga Studio",
+        tag: "Creator Hub",
+        description: "Full-floor Chroma key green screen studio with 4K multi-cam capture and broadcast podcast audio setup.",
+        image: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=600",
+        features: ["Full Chroma Floor & Wall", "4K Multi-Camera Array", "Broadcast Podcast Mics"]
+    },
+    {
+        id: 10,
+        title: "Sampoorna Academy - Music Courses",
+        price: "₹3,500 / month",
+        category: "Sampoorna Academy",
+        tag: "Music Education",
+        description: "Curriculum-based courses in Vocal Singing, Keyboard, Flute, and Tabla with individual mentorship and certifications.",
+        image: "https://images.unsplash.com/photo-1520523839898-5071282543e2?auto=format&fit=crop&q=80&w=600",
+        features: ["Singing, Keyboard, Flute, Tabla", "Weekend & Weekday Batches", "Performance Certification"]
+    }
 ];
 
 const DEFAULT_PLANS = [
