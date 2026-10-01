@@ -11,10 +11,14 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Data directory for local persistence
-const DATA_DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+// Data directory for local persistence (fallback to /tmp when running on Vercel serverless)
+const DATA_DIR = process.env.VERCEL ? path.join('/tmp', 'data') : path.join(__dirname, 'data');
+try {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+} catch (e) {
+    console.warn('⚠️ Notice: Could not create local data directory:', e.message);
 }
 
 const SERVICES_FILE = path.join(DATA_DIR, 'services.json');
@@ -39,14 +43,31 @@ const PLANS_TABLE_NAME = process.env.DYNAMODB_PLANS_TABLE || 'SoundscapePlans';
 const INQUIRIES_TABLE_NAME = process.env.DYNAMODB_INQUIRIES_TABLE || 'SoundscapeInquiries';
 
 // Middleware
+const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
 app.use(cors({
-    origin: '*',
+    origin: allowedOrigin === '*' ? '*' : allowedOrigin.split(',').map(o => o.trim()),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(DATA_DIR, 'uploads')));
+
+// Health Check Routes (for Vercel deployment verification & uptime monitoring)
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        message: "Server running on Vercel!"
+    });
+});
+
+app.get('/', (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        message: "Soundscape Backend API running on Vercel!"
+    });
+});
 
 // Configure Multer for memory storage (max 100MB per file)
 const storage = multer.memoryStorage();
@@ -1405,86 +1426,86 @@ app.post('/api/contact', async (req, res) => {
                     <meta charset="utf-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 </head>
-                <body style="margin: 0; padding: 20px; background-color: #0B0909; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #FAF6F6;">
-                    <div style="max-width: 600px; margin: 0 auto; background: linear-gradient(180deg, #1C1717 0%, #141010 100%); border: 1px solid #2B2323; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+                <body style="margin: 0; padding: 20px; background-color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #FDFDFC;">
+                    <div style="max-width: 600px; margin: 0 auto; background: linear-gradient(180deg, #0c0c0c 0%, #000000 100%); border: 1px solid #222222; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
                         
                         <!-- Top Accent Banner -->
-                        <div style="background: linear-gradient(90deg, #C3195D 0%, #F70776 50%, #C3195D 100%); height: 6px;"></div>
+                        <div style="background: linear-gradient(90deg, #E04B0A 0%, #FF5D16 50%, #E04B0A 100%); height: 6px;"></div>
                         
                         <!-- Header Section -->
-                        <div style="padding: 28px 28px 20px 28px; text-align: center; border-bottom: 1px solid #2B2323;">
-                            <div style="display: inline-block; padding: 4px 14px; background: rgba(247, 7, 118, 0.15); border: 1px solid rgba(247, 7, 118, 0.4); border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #F70776; margin-bottom: 12px;">
+                        <div style="padding: 28px 28px 20px 28px; text-align: center; border-bottom: 1px solid #222222;">
+                            <div style="display: inline-block; padding: 4px 14px; background: rgba(255, 93, 22, 0.15); border: 1px solid rgba(255, 93, 22, 0.4); border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #FF5D16; margin-bottom: 12px;">
                                 🎧 New Booking Inquiry
                             </div>
-                            <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; text-transform: uppercase; color: #FAF6F6;">
-                                SS <span style="color: #F70776;">Audios</span>
+                            <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; text-transform: uppercase; color: #FDFDFC;">
+                                SS <span style="color: #FF5D16;">Audios</span>
                             </h1>
-                            <p style="margin: 6px 0 0 0; font-size: 13px; color: #A69B9B;">
+                            <p style="margin: 6px 0 0 0; font-size: 13px; color: #9E9E9E;">
                                 Live Concert Sound, DJ & Stage Production Leads
                             </p>
                         </div>
 
                         <!-- Client Summary Card -->
                         <div style="padding: 24px 28px;">
-                            <div style="background: #181414; border: 1px solid #2B2323; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
+                            <div style="background: #0f0f0f; border: 1px solid #222222; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                                     <div>
-                                        <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #A69B9B; letter-spacing: 1px;">Client Name</span>
+                                        <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #9E9E9E; letter-spacing: 1px;">Client Name</span>
                                         <h2 style="margin: 4px 0 0 0; font-size: 22px; font-weight: 800; color: #FFFFFF;">${fullName}</h2>
                                     </div>
                                     <div style="text-align: right;">
-                                        <span style="display: inline-block; padding: 4px 12px; background: #C3195D; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; border-radius: 8px;">
+                                        <span style="display: inline-block; padding: 4px 12px; background: #E04B0A; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; border-radius: 8px;">
                                             ${orgName}
                                         </span>
                                     </div>
                                 </div>
 
-                                <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #FAF6F6;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #FDFDFC;">
                                     <tr>
-                                        <td style="padding: 8px 0; color: #A69B9B; width: 35%; font-weight: 600;">🏢 Corporate / Org:</td>
+                                        <td style="padding: 8px 0; color: #9E9E9E; width: 35%; font-weight: 600;">🏢 Corporate / Org:</td>
                                         <td style="padding: 8px 0; font-weight: bold; color: #FFFFFF;">${orgName}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 8px 0; color: #A69B9B; width: 35%; font-weight: 600;">✉️ Email:</td>
+                                        <td style="padding: 8px 0; color: #9E9E9E; width: 35%; font-weight: 600;">✉️ Email:</td>
                                         <td style="padding: 8px 0; font-weight: bold;">
-                                            <a href="mailto:${email}" style="color: #F70776; text-decoration: none;">${email}</a>
+                                            <a href="mailto:${email}" style="color: #FF5D16; text-decoration: none;">${email}</a>
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 8px 0; color: #A69B9B; font-weight: 600;">📞 Phone:</td>
-                                        <td style="padding: 8px 0; font-weight: bold; color: #FAF6F6;">
-                                            ${phone ? `<a href="tel:${phone}" style="color: #FAF6F6; text-decoration: none;">${phone}</a>` : '<span style="color: #665C5C;">Not provided</span>'}
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">📞 Phone:</td>
+                                        <td style="padding: 8px 0; font-weight: bold; color: #FDFDFC;">
+                                            ${phone ? `<a href="tel:${phone}" style="color: #FDFDFC; text-decoration: none;">${phone}</a>` : '<span style="color: #666666;">Not provided</span>'}
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 8px 0; color: #A69B9B; font-weight: 600;">⚡ Requested Services:</td>
-                                        <td style="padding: 8px 0; color: #F70776; font-weight: bold;">${selectedServices}</td>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">⚡ Requested Services:</td>
+                                        <td style="padding: 8px 0; color: #FF5D16; font-weight: bold;">${selectedServices}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 8px 0; color: #A69B9B; font-weight: 600;">🕒 Received (IST):</td>
-                                        <td style="padding: 8px 0; color: #FAF6F6; font-size: 12px; font-weight: bold;">${istFormattedTime}</td>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">🕒 Received (IST):</td>
+                                        <td style="padding: 8px 0; color: #FDFDFC; font-size: 12px; font-weight: bold;">${istFormattedTime}</td>
                                     </tr>
                                 </table>
                             </div>
 
                             <!-- Message Box -->
-                            <div style="background: #141010; border-left: 4px solid #F70776; border-radius: 0 12px 12px 0; padding: 18px; margin-bottom: 24px; border-top: 1px solid #2B2323; border-right: 1px solid #2B2323; border-bottom: 1px solid #2B2323;">
-                                <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #A69B9B; margin-bottom: 8px;">
+                            <div style="background: #000000; border-left: 4px solid #FF5D16; border-radius: 0 12px 12px 0; padding: 18px; margin-bottom: 24px; border-top: 1px solid #222222; border-right: 1px solid #222222; border-bottom: 1px solid #222222;">
+                                <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #9E9E9E; margin-bottom: 8px;">
                                     📝 Message / Special Requirements:
                                 </div>
-                                <div style="font-size: 14px; line-height: 1.6; color: #E8E0E0; white-space: pre-wrap;">
-                                    ${message ? message.replace(/\n/g, '<br/>') : '<em style="color: #736969;">No additional message specified by client.</em>'}
+                                <div style="font-size: 14px; line-height: 1.6; color: #EBEBEB; white-space: pre-wrap;">
+                                    ${message ? message.replace(/\n/g, '<br/>') : '<em style="color: #737373;">No additional message specified by client.</em>'}
                                 </div>
                             </div>
 
                             <!-- Quick Action Buttons -->
-                            <div style="text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #2B2323;">
+                            <div style="text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #222222;">
                                 ${whatsappUrl ? `
                                     <a href="${whatsappUrl}" style="display: inline-block; background-color: #25D366; color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
                                         💬 Reply on WhatsApp
                                     </a>
                                 ` : ''}
-                                <a href="mailto:${email}?subject=SS%20Audios%20Booking%20Inquiry%20Response" style="display: inline-block; background: linear-gradient(90deg, #C3195D 0%, #F70776 100%); color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <a href="mailto:${email}?subject=SS%20Audios%20Booking%20Inquiry%20Response" style="display: inline-block; background: linear-gradient(90deg, #E04B0A 0%, #FF5D16 100%); color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
                                     ✉️ Reply via Email
                                 </a>
                             </div>
@@ -1492,7 +1513,7 @@ app.post('/api/contact', async (req, res) => {
                         </div>
 
                         <!-- Footer -->
-                        <div style="background: #0F0D0D; padding: 16px 28px; text-align: center; border-top: 1px solid #2B2323; font-size: 11px; color: #665C5C;">
+                        <div style="background: #000000; padding: 16px 28px; text-align: center; border-top: 1px solid #222222; font-size: 11px; color: #666666;">
                             Sent automatically from <strong>SS Audios Web Application</strong> • All rights reserved.
                         </div>
 
@@ -1560,12 +1581,21 @@ app.post('/api/contact', async (req, res) => {
     }
 });
 
-// Start Server and verify infrastructure
-app.listen(PORT, async () => {
-    console.log(`=============================================`);
-    console.log(`🎧 Soundscape Server running on port ${PORT}`);
-    console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
-    console.log(`📁 Media API:    http://localhost:${PORT}/api/media`);
-    console.log(`=============================================`);
-    await initAWSInfrastructure();
-});
+// Start Server locally when not running inside Vercel Serverless
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
+    app.listen(PORT, async () => {
+        console.log(`=============================================`);
+        console.log(`🎧 Soundscape Server running on port ${PORT}`);
+        console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
+        console.log(`📁 Media API:    http://localhost:${PORT}/api/media`);
+        console.log(`=============================================`);
+        try {
+            await initAWSInfrastructure();
+        } catch (e) {
+            console.warn('⚠️ AWS init notice:', e.message);
+        }
+    });
+}
+
+// Export the Express app for Vercel serverless functions
+module.exports = app;
