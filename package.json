@@ -1,7 +1,7 @@
 {
-  "name": "soundscape-be",
+  "name": "ss-audios-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "SS Audios Backend API - Media Vault, Catalog, Inquiries, Admin & AI services (Erode, Tamil Nadu)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,13 +9,20 @@
     "preview": "node server.js",
     "serve": "node server.js",
     "build": "echo Build complete",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "ss-audios",
+    "soundscape",
+    "event-production",
+    "dj-events",
+    "raga-studio"
+  ],
+  "author": "SS Audios",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@google/genai": "^3.6.1",
     "aws-sdk": "^2.1693.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

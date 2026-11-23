@@ -1,4 +1,19 @@
-require('dotenv').config();
+/**
+ * SS Audios Backend Server (Erode, Tamil Nadu)
+ * Comprehensive Full-Stack API supporting:
+ * - Public Site Data & Catalog Hydration (/api/site-data)
+ * - Video Streaming with HTTP 206 Partial Content (/api/media/:slotId/:filename)
+ * - Admin Authentication, Google OAuth, Passcode Claim & Verification (/api/admin/auth/*)
+ * - Dynamic Catalog & Pricing Management for DJ Packages, Services, Studio & Academy (/api/admin/catalog)
+ * - Portfolio Slot Management & Resumable Chunked Video Uploads (/api/admin/uploads/*, /api/admin/portfolio/*)
+ * - Google Gemini AI Services (Quick Advisor, Blueprint, Venue Grounding, Image Studio & Veo Animation)
+ * - Booking Inquiries & Contact Dispatch with Luxury HTML Email Notifications (Resend & Nodemailer)
+ * - AWS S3 Media Vault & DynamoDB Cloud Synchronization with Local JSON Failover
+ * - Compatibility with Vercel Serverless Functions and Local Express 5 Development
+ */
+
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -6,26 +21,76 @@ const AWS = require('aws-sdk');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
-const path = require('path');
+const { promisify } = require('util');
+const { execFile } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const OWNER_EMAIL = process.env.OWNER_EMAIL || 'connectjawa@gmail.com';
+const SESSION_SECRET =
+    process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 16
+        ? process.env.SESSION_SECRET
+        : 'ss-audios-production-secret-token-key-2026';
 
-// Data directory for local persistence (fallback to /tmp when running on Vercel serverless)
+// Storage directories (with serverless /tmp fallback when running on Vercel)
 const DATA_DIR = process.env.VERCEL ? path.join('/tmp', 'data') : path.join(__dirname, 'data');
-try {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+const VIDEOS_DIR = path.join(DATA_DIR, 'videos');
+const TMP_UPLOADS_DIR = path.join(DATA_DIR, 'tmp_uploads');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+
+for (const dir of [DATA_DIR, VIDEOS_DIR, TMP_UPLOADS_DIR, UPLOADS_DIR]) {
+    try {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+    } catch (e) {
+        console.warn(`Notice: Could not create directory ${dir}:`, e.message);
     }
-} catch (e) {
-    console.warn('⚠️ Notice: Could not create local data directory:', e.message);
 }
 
+const STORE_FILE = path.join(DATA_DIR, 'store.json');
 const SERVICES_FILE = path.join(DATA_DIR, 'services.json');
 const PLANS_FILE = path.join(DATA_DIR, 'plans.json');
 const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
 
-// Configure Nodemailer Transporter with Gmail
+// Copy initial seed store from repository root if running on Vercel or freshly cloned
+if (!fs.existsSync(STORE_FILE)) {
+    const rootSeed = path.join(__dirname, 'data', 'store.json');
+    const ssaudiosSeed = path.join(__dirname, '..', 'ssaudios2', '.ss_audios_data', 'store.json');
+    try {
+        if (fs.existsSync(rootSeed)) {
+            fs.copyFileSync(rootSeed, STORE_FILE);
+        } else if (fs.existsSync(ssaudiosSeed)) {
+            fs.copyFileSync(ssaudiosSeed, STORE_FILE);
+        }
+    } catch (e) {
+        console.warn('Notice: Could not seed store.json:', e.message);
+    }
+}
+
+// -------------------------------------------------------------
+// Constants & Quotas (aligned with ssaudios2 domain specification)
+// -------------------------------------------------------------
+const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 * 1024; // 5 GiB total
+const MAX_VIDEO_FILE_BYTES = 3 * 1024 * 1024 * 1024; // 3 GiB per video
+
+const BUSINESS_CONTACT = {
+    name: 'SS Audios',
+    website: 'www.ssaudios.in',
+    websiteUrl: 'https://www.ssaudios.in/',
+    email: 'ssaudios25@gmail.com',
+    ownerEmail: OWNER_EMAIL,
+    phoneDisplay: '+91 99653 68899',
+    phoneDigits: '919965368899',
+    whatsappBase: 'https://wa.me/919965368899',
+    instagramHandle: '@ss_audios_and_dj_events_erode',
+    cityRegion: 'Erode, Tamil Nadu, India',
+    erodeCenter: { lat: 11.329948, lng: 77.704 },
+};
+
+// -------------------------------------------------------------
+// Nodemailer SMTP Transporter
+// -------------------------------------------------------------
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -34,49 +99,17 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// Configuration Constants
+// -------------------------------------------------------------
+// AWS S3 & DynamoDB Configuration
+// -------------------------------------------------------------
 const REGION = process.env.AWS_REGION || 'ap-south-1';
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || 'soundscape-media-vault-' + REGION;
 const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || 'SoundscapeMedia';
 const SERVICES_TABLE_NAME = process.env.DYNAMODB_SERVICES_TABLE || 'SoundscapeServices';
 const PLANS_TABLE_NAME = process.env.DYNAMODB_PLANS_TABLE || 'SoundscapePlans';
 const INQUIRIES_TABLE_NAME = process.env.DYNAMODB_INQUIRIES_TABLE || 'SoundscapeInquiries';
+const STORE_TABLE_NAME = process.env.DYNAMODB_STORE_TABLE || 'SoundscapeStore';
 
-// Middleware
-const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
-app.use(cors({
-    origin: allowedOrigin === '*' ? '*' : allowedOrigin.split(',').map(o => o.trim()),
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    credentials: true
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(DATA_DIR, 'uploads')));
-
-// Health Check Routes (for Vercel deployment verification & uptime monitoring)
-app.get('/api/health', (req, res) => {
-    res.status(200).json({
-        status: "ok",
-        message: "Server running on Vercel!"
-    });
-});
-
-app.get('/', (req, res) => {
-    res.status(200).json({
-        status: "ok",
-        message: "Soundscape Backend API running on Vercel!"
-    });
-});
-
-// Configure Multer for memory storage (max 100MB per file)
-const storage = multer.memoryStorage();
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 100 * 1024 * 1024 }
-});
-
-// Configure AWS SDK
 AWS.config.update({
     region: REGION,
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -89,404 +122,513 @@ const docClient = new AWS.DynamoDB.DocumentClient();
 
 let infrastructureReady = false;
 
-// -------------------------------------------------------------
-// Auto-initialize AWS Infrastructure (DynamoDB Tables & S3 Bucket)
-// -------------------------------------------------------------
 async function initAWSInfrastructure() {
+    if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+        console.log('ℹ️ AWS Credentials not provided; using high-speed local data persistence.');
+        return;
+    }
     console.log('🚀 Checking AWS Infrastructure (DynamoDB & S3)...');
 
-    // Helper to ensure a DynamoDB table exists
     async function ensureTable(tableName, keyName = 'id', keyType = 'S') {
         try {
-            console.log(`[DynamoDB] Checking table: "${tableName}"...`);
             const tableDesc = await dynamodb.describeTable({ TableName: tableName }).promise();
-            console.log(`✅ [DynamoDB] Table "${tableName}" exists (Status: ${tableDesc.Table.TableStatus}).`);
+            console.log(`✅ [DynamoDB] Table "${tableName}" active (${tableDesc.Table.TableStatus}).`);
         } catch (err) {
             if (err.code === 'ResourceNotFoundException') {
-                console.log(`⚠️  [DynamoDB] Table "${tableName}" not found. Creating now...`);
-                const params = {
+                console.log(`⚠️ [DynamoDB] Creating table "${tableName}"...`);
+                await dynamodb.createTable({
                     TableName: tableName,
-                    KeySchema: [
-                        { AttributeName: keyName, KeyType: 'HASH' }
-                    ],
-                    AttributeDefinitions: [
-                        { AttributeName: keyName, AttributeType: keyType }
-                    ],
+                    KeySchema: [{ AttributeName: keyName, KeyType: 'HASH' }],
+                    AttributeDefinitions: [{ AttributeName: keyName, AttributeType: keyType }],
                     BillingMode: 'PAY_PER_REQUEST'
-                };
-                await dynamodb.createTable(params).promise();
-                console.log(`⏳ [DynamoDB] Waiting for table "${tableName}" to become ACTIVE...`);
-                await dynamodb.waitFor('tableExists', { TableName: tableName }).promise();
-                console.log(`✅ [DynamoDB] Table "${tableName}" created and ACTIVE!`);
-            } else {
-                console.error(`❌ [DynamoDB] Error checking/creating table "${tableName}":`, err.message);
-            }
-        }
-    }
-
-    // 1. Check & Create DynamoDB Tables (Media, Services, Plans, Inquiries)
-    await ensureTable(TABLE_NAME, 'id', 'S');
-    await ensureTable(SERVICES_TABLE_NAME, 'id', 'S');
-    await ensureTable(PLANS_TABLE_NAME, 'id', 'S');
-    await ensureTable(INQUIRIES_TABLE_NAME, 'id', 'S');
-
-    // 2. Check & Create S3 Bucket
-    try {
-        console.log(`[S3] Checking bucket: "${BUCKET_NAME}"...`);
-        await s3.headBucket({ Bucket: BUCKET_NAME }).promise();
-        console.log(`✅ [S3] Bucket "${BUCKET_NAME}" exists and is accessible.`);
-    } catch (err) {
-        if (err.statusCode === 404 || err.code === 'NotFound' || err.code === 'NoSuchBucket') {
-            console.log(`⚠️  [S3] Bucket "${BUCKET_NAME}" not found. Creating bucket in ${REGION}...`);
-            const createParams = {
-                Bucket: BUCKET_NAME,
-                ...(REGION !== 'us-east-1' ? {
-                    CreateBucketConfiguration: {
-                        LocationConstraint: REGION
-                    }
-                } : {})
-            };
-            await s3.createBucket(createParams).promise();
-            console.log(`✅ [S3] Bucket "${BUCKET_NAME}" created successfully!`);
-
-            // Apply CORS to the newly created bucket
-            try {
-                await s3.putBucketCors({
-                    Bucket: BUCKET_NAME,
-                    CORSConfiguration: {
-                        CORSRules: [
-                            {
-                                AllowedHeaders: ['*'],
-                                AllowedMethods: ['GET', 'HEAD'],
-                                AllowedOrigins: ['*'],
-                                MaxAgeSeconds: 3000
-                            }
-                        ]
-                    }
                 }).promise();
-                console.log(`✅ [S3] CORS configuration applied to "${BUCKET_NAME}".`);
-            } catch (corsErr) {
-                console.warn(`⚠️ [S3] Could not apply CORS:`, corsErr.message);
+                await dynamodb.waitFor('tableExists', { TableName: tableName }).promise();
+                console.log(`✅ [DynamoDB] Table "${tableName}" created successfully.`);
+            } else {
+                console.warn(`[DynamoDB Notice for "${tableName}"]:`, err.message);
             }
-        } else {
-            console.error(`❌ [S3] Error accessing bucket "${BUCKET_NAME}":`, err.message);
         }
     }
 
-    infrastructureReady = true;
-    console.log('🎉 AWS Infrastructure verification complete.');
+    try {
+        await ensureTable(TABLE_NAME, 'id', 'S');
+        await ensureTable(SERVICES_TABLE_NAME, 'id', 'S');
+        await ensureTable(PLANS_TABLE_NAME, 'id', 'S');
+        await ensureTable(INQUIRIES_TABLE_NAME, 'id', 'S');
+        await ensureTable(STORE_TABLE_NAME, 'id', 'S');
+
+        try {
+            await s3.headBucket({ Bucket: BUCKET_NAME }).promise();
+            console.log(`✅ [S3] Bucket "${BUCKET_NAME}" accessible.`);
+        } catch (s3Err) {
+            if (s3Err.statusCode === 404 || s3Err.code === 'NotFound' || s3Err.code === 'NoSuchBucket') {
+                console.log(`⚠️ [S3] Creating bucket "${BUCKET_NAME}" in ${REGION}...`);
+                await s3.createBucket({
+                    Bucket: BUCKET_NAME,
+                    ...(REGION !== 'us-east-1' ? { CreateBucketConfiguration: { LocationConstraint: REGION } } : {})
+                }).promise();
+                console.log(`✅ [S3] Bucket "${BUCKET_NAME}" created.`);
+            }
+        }
+        infrastructureReady = true;
+    } catch (infraErr) {
+        console.warn('⚠️ AWS initialization notice:', infraErr.message);
+    }
 }
 
 // -------------------------------------------------------------
-// REST API Endpoints
+// Middleware Configuration
+// -------------------------------------------------------------
+const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigin === '*') {
+            return callback(null, true);
+        }
+        const origins = allowedOrigin.split(',').map(o => o.trim());
+        if (origins.includes(origin) || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+            return callback(null, true);
+        }
+        return callback(null, true); // Permissive for preview deployments
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Range', 'x-upload-offset'],
+    exposedHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Length', 'x-upload-offset'],
+    credentials: true,
+}));
+
+// Binary body parser specifically for chunked video uploads (up to 16 MB per chunk)
+app.use('/api/admin/uploads/:uploadId/chunk', express.raw({ type: 'application/octet-stream', limit: '16mb' }));
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Static file servers for uploads & videos
+app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/videos', express.static(VIDEOS_DIR));
+
+// Configure Multer for in-memory file uploads (max 100MB per file)
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 }
+});
+
+// -------------------------------------------------------------
+// Helper Functions: Safe Paths & Crypto
+// -------------------------------------------------------------
+function sanitizeSafeSegment(input) {
+    if (!input || typeof input !== 'string') return 'item';
+    return input.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 180);
+}
+
+function resolveConfinedPath(baseDir, ...segments) {
+    const resolvedBase = path.resolve(baseDir);
+    const resolvedTarget = path.resolve(resolvedBase, ...segments);
+    if (!resolvedTarget.startsWith(resolvedBase + path.sep) && resolvedTarget !== resolvedBase) {
+        return null;
+    }
+    return resolvedTarget;
+}
+
+function timingSafeStringEqual(a, b) {
+    const bufA = Buffer.from(String(a));
+    const bufB = Buffer.from(String(b));
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function hashPasscode(passcode, salt) {
+    const finalSalt = salt || crypto.randomBytes(16).toString('hex');
+    const derived = crypto.scryptSync(passcode, finalSalt, 64).toString('hex');
+    return { salt: finalSalt, hash: derived };
+}
+
+function verifyPasscode(passcode, cred) {
+    if (!cred || !cred.salt || !cred.hash) return false;
+    const { hash } = hashPasscode(passcode, cred.salt);
+    const a = Buffer.from(hash, 'hex');
+    const b = Buffer.from(cred.hash, 'hex');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+}
+
+function signAdminToken(subject) {
+    const payload = JSON.stringify({
+        sub: subject,
+        exp: Date.now() + 1000 * 60 * 60 * 24, // 24 hours
+    });
+    const encoded = Buffer.from(payload).toString('base64url');
+    const sig = crypto.createHmac('sha256', SESSION_SECRET).update(encoded).digest('base64url');
+    return `${encoded}.${sig}`;
+}
+
+function verifyAdminToken(token) {
+    if (!token || typeof token !== 'string') return null;
+    const parts = token.split('.');
+    if (parts.length !== 2) return null;
+    const [encoded, sig] = parts;
+    const expected = crypto.createHmac('sha256', SESSION_SECRET).update(encoded).digest('base64url');
+    if (!timingSafeStringEqual(sig, expected)) return null;
+    try {
+        const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+        if (!parsed.sub || !parsed.exp || Date.now() > parsed.exp) return null;
+        return { sub: parsed.sub };
+    } catch {
+        return null;
+    }
+}
+
+function requireAdminAuth(req, res, next) {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Admin authentication required.' });
+    }
+    const token = authHeader.slice('Bearer '.length).trim();
+    const verified = verifyAdminToken(token);
+    if (!verified) {
+        return res.status(401).json({ error: 'Invalid or expired admin session token.' });
+    }
+    req.adminSession = verified;
+    next();
+}
+
+// -------------------------------------------------------------
+// Data Persistence: Store, Services, Plans, Inquiries
+// -------------------------------------------------------------
+function computeStorageStats(categories) {
+    let usedBytes = 0;
+    let publishedCount = 0;
+    let totalSlots = 0;
+
+    if (Array.isArray(categories)) {
+        for (const cat of categories) {
+            if (Array.isArray(cat.slots)) {
+                for (const slot of cat.slots) {
+                    totalSlots += 1;
+                    if (slot.status === 'published' && slot.videoUrl) {
+                        publishedCount += 1;
+                        usedBytes += Math.max(0, slot.fileSizeBytes || 0);
+                    }
+                }
+            }
+        }
+    }
+
+    const remainingBytes = Math.max(0, STORAGE_QUOTA_BYTES - usedBytes);
+    const usedPercent = STORAGE_QUOTA_BYTES > 0 ? Math.min(100, (usedBytes / STORAGE_QUOTA_BYTES) * 100) : 0;
+
+    return {
+        usedBytes,
+        quotaBytes: STORAGE_QUOTA_BYTES,
+        maxFileBytes: MAX_VIDEO_FILE_BYTES,
+        remainingBytes,
+        usedPercent,
+        publishedCount,
+        totalSlots,
+    };
+}
+
+function loadStore() {
+    try {
+        if (fs.existsSync(STORE_FILE)) {
+            const raw = fs.readFileSync(STORE_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed.djPackages) && Array.isArray(parsed.portfolioCategories)) {
+                return parsed;
+            }
+        }
+    } catch (e) {
+        console.warn('Notice: Could not read local store.json:', e.message);
+    }
+    return {
+        currency: 'INR',
+        djPackages: [],
+        signatureServices: [],
+        ragaStudioServices: [],
+        academyCourses: [],
+        sectionVisibility: { services: true, portfolio: true, djPackages: true, ragaStudio: true, sampoornaAcademy: true },
+        portfolioCategories: [],
+        adminCredential: null,
+        updatedAt: new Date().toISOString(),
+    };
+}
+
+let store = loadStore();
+
+function saveStore(data) {
+    data.updatedAt = new Date().toISOString();
+    store = data;
+    try {
+        const tmp = `${STORE_FILE}.tmp`;
+        fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+        fs.renameSync(tmp, STORE_FILE);
+    } catch (e) {
+        console.warn('Notice: Could not write store.json:', e.message);
+    }
+
+    if (infrastructureReady) {
+        docClient.put({
+            TableName: STORE_TABLE_NAME,
+            Item: {
+                id: 'ss_audios_store_v1',
+                updatedAt: data.updatedAt,
+                payload: JSON.stringify(data),
+            }
+        }).promise().catch(err => console.warn('[DynamoDB Store Put]:', err.message));
+    }
+}
+
+function buildPublicPayload() {
+    return {
+        currency: store.currency || 'INR',
+        djPackages: store.djPackages || [],
+        signatureServices: store.signatureServices || [],
+        ragaStudioServices: store.ragaStudioServices || [],
+        academyCourses: store.academyCourses || [],
+        sectionVisibility: store.sectionVisibility || { services: true, portfolio: true, djPackages: true, ragaStudio: true, sampoornaAcademy: true },
+        portfolioCategories: store.portfolioCategories || [],
+        storageStats: computeStorageStats(store.portfolioCategories),
+        ownerEmailHint: OWNER_EMAIL,
+        updatedAt: store.updatedAt || new Date().toISOString(),
+    };
+}
+
+function findSlot(slotId) {
+    if (!Array.isArray(store.portfolioCategories)) return null;
+    for (const category of store.portfolioCategories) {
+        if (Array.isArray(category.slots)) {
+            const slot = category.slots.find(s => s.id === slotId);
+            if (slot) return { category, slot };
+        }
+    }
+    return null;
+}
+
+function removeLocalVideoFile(videoUrl) {
+    if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.startsWith('/api/media/')) return;
+    const parts = videoUrl.replace('/api/media/', '').split('/');
+    if (parts.length !== 2) return;
+    const safeSlot = sanitizeSafeSegment(parts[0]);
+    const safeFile = sanitizeSafeSegment(parts[1]);
+    const target = resolveConfinedPath(VIDEOS_DIR, safeSlot, safeFile);
+    if (target && fs.existsSync(target)) {
+        try {
+            fs.unlinkSync(target);
+        } catch {
+            // ignore
+        }
+    }
+}
+
+function getServices() {
+    try {
+        if (fs.existsSync(SERVICES_FILE)) {
+            return JSON.parse(fs.readFileSync(SERVICES_FILE, 'utf8'));
+        }
+    } catch (e) {
+        console.warn('Notice: Could not read services.json:', e.message);
+    }
+    return [];
+}
+
+function saveServices(services) {
+    try {
+        fs.writeFileSync(SERVICES_FILE, JSON.stringify(services, null, 2), 'utf8');
+    } catch (e) {
+        console.warn('Notice: Could not write services.json:', e.message);
+    }
+}
+
+function getPlans() {
+    try {
+        if (fs.existsSync(PLANS_FILE)) {
+            return JSON.parse(fs.readFileSync(PLANS_FILE, 'utf8'));
+        }
+    } catch (e) {
+        console.warn('Notice: Could not read plans.json:', e.message);
+    }
+    return [];
+}
+
+function savePlans(plans) {
+    try {
+        fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2), 'utf8');
+    } catch (e) {
+        console.warn('Notice: Could not write plans.json:', e.message);
+    }
+}
+
+function getInquiries() {
+    try {
+        if (fs.existsSync(INQUIRIES_FILE)) {
+            return JSON.parse(fs.readFileSync(INQUIRIES_FILE, 'utf8'));
+        }
+    } catch (e) {
+        console.warn('Notice: Could not read inquiries.json:', e.message);
+    }
+    return [];
+}
+
+function saveInquiries(inquiries) {
+    try {
+        fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(inquiries, null, 2), 'utf8');
+    } catch (e) {
+        console.warn('Notice: Could not write inquiries.json:', e.message);
+    }
+}
+
+// Active chunked upload sessions
+const activeUploads = new Map();
+
+// -------------------------------------------------------------
+// Google Gemini Client Initialization
+// -------------------------------------------------------------
+let cachedGoogleGenAI = null;
+async function getGeminiClient() {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error('GEMINI_API_KEY is not configured in environment variables.');
+    }
+    if (!cachedGoogleGenAI) {
+        const genaiModule = await import('@google/genai');
+        cachedGoogleGenAI = genaiModule.GoogleGenAI;
+    }
+    return new cachedGoogleGenAI({
+        apiKey,
+        httpOptions: {
+            headers: {
+                'User-Agent': 'ss-audios-backend',
+            },
+        },
+    });
+}
+
+function parseGeminiError(err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED') || msg.includes('403')) {
+        return { status: 403, message: 'Please verify your GEMINI_API_KEY in backend .env file.' };
+    }
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
+        return { status: 429, message: 'Gemini API quota reached. Please check your Google Cloud quota.' };
+    }
+    return { status: 500, message: msg || 'AI service encountered an unexpected error.' };
+}
+
+// -------------------------------------------------------------
+// REST API ROUTES
 // -------------------------------------------------------------
 
-// Health Check Endpoint
+// 1. Health Checks
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'online',
+        service: 'SS Audios Backend API',
+        location: 'Erode, Tamil Nadu, India',
         infrastructureReady,
         region: REGION,
         s3Bucket: BUCKET_NAME,
-        dynamoTable: TABLE_NAME,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        storageStats: computeStorageStats(store.portfolioCategories),
     });
 });
 
-// GET all media items (optionally filter by ?category= or ?type=)
-app.get('/api/media', async (req, res) => {
-    try {
-        const { category, type } = req.query;
-        const params = {
-            TableName: TABLE_NAME
-        };
-
-        const result = await docClient.scan(params).promise();
-        let items = result.Items || [];
-
-        // In-memory filter if query params provided
-        if (category && category !== 'All') {
-            items = items.filter(item => item.category?.toLowerCase() === category.toLowerCase());
-        }
-        if (type && type !== 'All') {
-            items = items.filter(item => item.type?.toLowerCase() === type.toLowerCase());
-        }
-
-        // Sort latest first
-        items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
-        res.json({
-            success: true,
-            count: items.length,
-            data: items
-        });
-    } catch (err) {
-        console.error('Error fetching media from DynamoDB:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch media records',
-            error: err.message
-        });
-    }
+app.get('/', (req, res) => {
+    res.json({
+        status: 'ok',
+        name: 'SS Audios Backend API',
+        website: BUSINESS_CONTACT.websiteUrl,
+        phone: BUSINESS_CONTACT.phoneDisplay,
+        version: '2.0.0',
+    });
 });
 
-// POST general file upload (for Services, Plans, and direct media upload)
-app.post('/api/upload', upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No file provided.' });
-        }
-
-        const sanitizedOriginalName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const s3Key = `uploads/${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${sanitizedOriginalName}`;
-        let fileUrl = '';
-
-        if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-            try {
-                const uploadParams = {
-                    Bucket: BUCKET_NAME,
-                    Key: s3Key,
-                    Body: req.file.buffer,
-                    ContentType: req.file.mimetype,
-                };
-                const s3Result = await s3.upload(uploadParams).promise();
-                fileUrl = s3Result.Location;
-            } catch (s3Err) {
-                console.warn('[S3 Direct Upload Warning]:', s3Err.message);
-            }
-        }
-
-        // Local fallback if S3 not reached or error
-        if (!fileUrl) {
-            const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
-            if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-            const localFileName = `${Date.now()}-${sanitizedOriginalName}`;
-            const localFilePath = path.join(UPLOADS_DIR, localFileName);
-            fs.writeFileSync(localFilePath, req.file.buffer);
-            fileUrl = `/uploads/${localFileName}`;
-        }
-
-        res.json({
-            success: true,
-            message: 'File uploaded successfully',
-            url: fileUrl,
-            fileName: req.file.originalname,
-            fileSize: req.file.size,
-            mimeType: req.file.mimetype
-        });
-    } catch (err) {
-        console.error('Error in general upload:', err);
-        res.status(500).json({ success: false, message: 'Failed to upload file', error: err.message });
-    }
+// 2. Public Site Data & Catalog Hydration (used by ssaudios2 App.tsx)
+app.get('/api/site-data', (_req, res) => {
+    res.json(buildPublicPayload());
 });
 
-// POST upload new media (Image, Video, Audio)
-app.post('/api/media', upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No media file provided.' });
+// 3. Media & Video Streaming with HTTP 206 Partial Content
+app.get('/api/media/:slotId/:filename', (req, res) => {
+    const safeSlot = sanitizeSafeSegment(req.params.slotId);
+    const safeFile = sanitizeSafeSegment(req.params.filename);
+    const filePath = resolveConfinedPath(VIDEOS_DIR, safeSlot, safeFile);
+
+    if (!filePath || !fs.existsSync(filePath)) {
+        // Fallback check in uploads directory
+        const uploadFallback = resolveConfinedPath(UPLOADS_DIR, safeFile);
+        if (uploadFallback && fs.existsSync(uploadFallback)) {
+            return streamLocalFile(uploadFallback, req, res);
         }
-
-        const { title, category, type } = req.body;
-        if (!title) {
-            return res.status(400).json({ success: false, message: 'Title is required.' });
-        }
-
-        const fileExt = req.file.originalname.includes('.')
-            ? req.file.originalname.split('.').pop()
-            : 'bin';
-        const sanitizedOriginalName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const s3Key = `media/${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${sanitizedOriginalName}`;
-
-        console.log(`[Upload] Uploading "${sanitizedOriginalName}" (${(req.file.size / 1024 / 1024).toFixed(2)} MB) to S3...`);
-
-        // Upload to S3
-        const uploadParams = {
-            Bucket: BUCKET_NAME,
-            Key: s3Key,
-            Body: req.file.buffer,
-            ContentType: req.file.mimetype,
-        };
-
-        const s3Result = await s3.upload(uploadParams).promise();
-        console.log(`✅ [Upload] Uploaded to S3: ${s3Result.Location}`);
-
-        // Determine media type
-        let inferredType = type;
-        if (!inferredType) {
-            if (req.file.mimetype.startsWith('video/')) inferredType = 'video';
-            else if (req.file.mimetype.startsWith('audio/')) inferredType = 'audio';
-            else inferredType = 'image';
-        }
-
-        // Save metadata in DynamoDB
-        const mediaItem = {
-            id: crypto.randomUUID(),
-            title: title.trim(),
-            category: category || 'Ambient',
-            type: inferredType,
-            url: s3Result.Location,
-            s3Key: s3Key,
-            fileName: req.file.originalname,
-            fileSize: req.file.size,
-            mimeType: req.file.mimetype,
-            createdAt: new Date().toISOString()
-        };
-
-        await docClient.put({
-            TableName: TABLE_NAME,
-            Item: mediaItem
-        }).promise();
-
-        console.log(`✅ [DynamoDB] Saved media metadata for "${mediaItem.title}" (ID: ${mediaItem.id})`);
-
-        res.status(201).json({
-            success: true,
-            message: 'Media uploaded and indexed successfully',
-            data: mediaItem
-        });
-    } catch (err) {
-        console.error('Error uploading media:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to upload and save media',
-            error: err.message
-        });
+        return res.status(404).json({ error: 'Media file not found.' });
     }
+
+    streamLocalFile(filePath, req, res);
 });
 
-// PUT update media metadata (Title & Category)
-app.put('/api/media/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { title, category } = req.body;
+function streamLocalFile(filePath, req, res) {
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType =
+        ext === '.jpg' || ext === '.jpeg'
+            ? 'image/jpeg'
+            : ext === '.png'
+            ? 'image/png'
+            : ext === '.webp'
+            ? 'image/webp'
+            : ext === '.webm'
+            ? 'video/webm'
+            : ext === '.mov'
+            ? 'video/quicktime'
+            : ext === '.mp3'
+            ? 'audio/mpeg'
+            : ext === '.wav'
+            ? 'audio/wav'
+            : 'video/mp4';
 
-        if (!title && !category) {
-            return res.status(400).json({ success: false, message: 'Nothing to update.' });
+    const range = req.headers.range;
+    if (range) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+        if (!match) {
+            return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
         }
-
-        const updateExpressions = [];
-        const expressionAttributeNames = {};
-        const expressionAttributeValues = {};
-
-        if (title) {
-            updateExpressions.push('#t = :title');
-            expressionAttributeNames['#t'] = 'title';
-            expressionAttributeValues[':title'] = title.trim();
+        const start = match[1] ? Number.parseInt(match[1], 10) : 0;
+        const end = match[2] ? Math.min(Number.parseInt(match[2], 10), fileSize - 1) : fileSize - 1;
+        if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= fileSize) {
+            return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
         }
-
-        if (category) {
-            updateExpressions.push('#c = :category');
-            expressionAttributeNames['#c'] = 'category';
-            expressionAttributeValues[':category'] = category;
-        }
-
-        updateExpressions.push('#u = :updatedAt');
-        expressionAttributeNames['#u'] = 'updatedAt';
-        expressionAttributeValues[':updatedAt'] = new Date().toISOString();
-
-        const params = {
-            TableName: TABLE_NAME,
-            Key: { id },
-            UpdateExpression: 'SET ' + updateExpressions.join(', '),
-            ExpressionAttributeNames: expressionAttributeNames,
-            ExpressionAttributeValues: expressionAttributeValues,
-            ReturnValues: 'ALL_NEW'
-        };
-
-        const updated = await docClient.update(params).promise();
-
-        res.json({
-            success: true,
-            message: 'Media item updated successfully',
-            data: updated.Attributes
+        const chunkSize = end - start + 1;
+        res.writeHead(206, {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunkSize,
+            'Content-Type': contentType,
+            'Cache-Control': 'public, max-age=3600',
         });
-    } catch (err) {
-        console.error('Error updating media in DynamoDB:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update media item',
-            error: err.message
+        fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+        res.writeHead(200, {
+            'Content-Length': fileSize,
+            'Content-Type': contentType,
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'public, max-age=3600',
         });
+        fs.createReadStream(filePath).pipe(res);
     }
-});
+}
 
-// DELETE media item from DynamoDB and S3
-app.delete('/api/media/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        // 1. Fetch item from DynamoDB to get S3 key
-        const getResult = await docClient.get({
-            TableName: TABLE_NAME,
-            Key: { id }
-        }).promise();
-
-        if (!getResult.Item) {
-            return res.status(404).json({ success: false, message: 'Media item not found.' });
-        }
-
-        const s3Key = getResult.Item.s3Key;
-
-        // 2. Delete from S3 if key exists
-        if (s3Key) {
-            try {
-                await s3.deleteObject({
-                    Bucket: BUCKET_NAME,
-                    Key: s3Key
-                }).promise();
-                console.log(`✅ [S3] Deleted object: ${s3Key}`);
-            } catch (s3Err) {
-                console.warn(`⚠️ [S3] Could not delete S3 object:`, s3Err.message);
-            }
-        }
-
-        // 3. Delete from DynamoDB
-        await docClient.delete({
-            TableName: TABLE_NAME,
-            Key: { id }
-        }).promise();
-
-        console.log(`✅ [DynamoDB] Deleted item ID: ${id}`);
-
-        res.json({
-            success: true,
-            message: 'Media item deleted successfully from S3 and DynamoDB'
-        });
-    } catch (err) {
-        console.error('Error deleting media:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete media item',
-            error: err.message
-        });
-    }
-});
-
-// Fallback proxy endpoint to stream media directly from S3 by Item ID (supports Range requests for video/audio seek)
+// Legacy streaming endpoint (for existing Soundscape S3 assets)
 app.get('/api/media/stream/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const getResult = await docClient.get({
-            TableName: TABLE_NAME,
-            Key: { id }
-        }).promise();
-
-        if (!getResult.Item || !getResult.Item.s3Key) {
-            return res.status(404).send('Media item or S3 key not found.');
-        }
-
-        const key = getResult.Item.s3Key;
+        const headParams = { Bucket: BUCKET_NAME, Key: id };
+        const metadata = await s3.headObject(headParams).promise();
+        const fileSize = metadata.ContentLength;
+        const contentType = metadata.ContentType || 'video/mp4';
         const range = req.headers.range;
 
-        const headParams = { Bucket: BUCKET_NAME, Key: key };
-        const headData = await s3.headObject(headParams).promise();
-
-        const fileSize = headData.ContentLength;
-        const contentType = headData.ContentType || 'application/octet-stream';
-
         if (range) {
-            const parts = range.replace(/bytes=/, '').split('-');
+            const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
             const chunksize = (end - start) + 1;
@@ -497,13 +639,7 @@ app.get('/api/media/stream/:id', async (req, res) => {
                 'Content-Length': chunksize,
                 'Content-Type': contentType,
             });
-
-            const streamParams = {
-                Bucket: BUCKET_NAME,
-                Key: key,
-                Range: `bytes=${start}-${end}`
-            };
-            s3.getObject(streamParams).createReadStream().pipe(res);
+            s3.getObject({ Bucket: BUCKET_NAME, Key: id, Range: `bytes=${start}-${end}` }).createReadStream().pipe(res);
         } else {
             res.writeHead(200, {
                 'Content-Length': fileSize,
@@ -513,898 +649,750 @@ app.get('/api/media/stream/:id', async (req, res) => {
             s3.getObject(headParams).createReadStream().pipe(res);
         }
     } catch (err) {
-        console.error('Stream error:', err.message);
-        res.status(404).send('File not found');
+        res.status(404).send('File not found in S3');
     }
 });
 
 // -------------------------------------------------------------
-// DEFAULT DATA & PERSISTENCE HELPERS FOR SERVICES & PLANS
+// Admin Authentication Routes
 // -------------------------------------------------------------
-const DEFAULT_SERVICES = [
-    {
-        id: 1,
-        title: "Wedding Events",
-        price: "₹25,000",
-        description:
-            "Unforgettable Wedding Audio & Staging. Tour-grade sound systems, precision acoustic tuning, and ambient staging tailored to make every vow and song crystal clear.",
-        image:
-            "https://images.unsplash.com/photo-1597157639073-69284dc0fdaf?q=80&w=1174&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        features: ["Precision Acoustic Tuning", "Tour-Grade Wireless Sound", "Ambient Staging & Lighting"],
-    },
-    {
-        id: 2,
-        title: "Goldstar Orchestra",
-        price: "₹25,000",
-        description:
-            "Crafted live orchestral arrangements, high-energy beatmatching, and versatile multi-genre music curation designed to keep your celebration vibrant and unforgettable.",
-        image:
-            "https://images.unsplash.com/photo-1571266028243-3716f02d2d2e?auto=format&fit=crop&q=80&w=600",
-        features: ["Live String & Brass Ensemble", "Multi-Genre Song Curation", "Dynamic Live Beatmatching"],
-    },
-    {
-        id: 3,
-        title: "Lighting & Audio",
-        price: "₹40,000",
-        description:
-            "Intelligent Lighting & Crystal-Clear Sound. Dynamic moving heads, laser shows, and synchronized strobes paired with high-fidelity audio engineering and low-fog atmospheric effects.",
-        image:
-            "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=600",
-        features: ["Moving Head Lasers & Strobes", "Synchronized FX & Low-Fog", "Hi-Fi Audio Engineering"],
-    },
-    {
-        id: 4,
-        title: "Welcome Dance",
-        price: "₹15,000",
-        description:
-            "Vibrant Welcome Dance Performance. Electrifying choreography, custom entrance tracks, and synchronized stage pyrotechnics designed to set an unforgettable opening tone for your guests.",
-        image:
-            "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
-        features: ["Custom Entrance Tracks", "Synchronized Stage Pyros", "Electrifying Choreography"],
-    },
-    {
-        id: 5,
-        title: "DJ Events",
-        price: "Starting from ₹15,000",
-        description:
-            "Electrifying DJ Events & Festival Beats. Festival-grade audio systems, seamless live stem mixing, and real-time visual synchronization designed to keep your dance floor packed all night.",
-        image:
-            "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=600",
-        features: ["Real-Time Stem Mixing", "Festival-Grade Sound Array", "Synchronized Visuals"],
-    },
-    {
-        id: 6,
-        title: "Instrumentals",
-        price: "₹10,000",
-        description:
-            "Mesmerizing Instrumental Performances. Soulful live solos and ensemble arrangements spanning violin, flute, saxophone, and classical instruments for an elegant, immersive ambiance.",
-        image:
-            "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&q=80&w=600",
-        features: ["Violin, Sax & Flute Solos", "Ensemble Arrangements", "Immersive Classical Ambiance"],
-    },
-    {
-        id: 7,
-        title: "Raga Studio - Plug & Play",
-        price: "₹1,500 / hr",
-        category: "Raga Studio",
-        tag: "Studio Recording",
-        description: "Zero-latency acoustic jamming, live recording, and high-end preamps ready for instant plug-and-play sessions.",
-        image: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
-        features: ["Zero-Latency Monitoring", "High-End Preamps", "Instant Multi-Track Export"]
-    },
-    {
-        id: 8,
-        title: "Raga Studio - Vocal Training & Mixing",
-        price: "₹2,500 / session",
-        category: "Raga Studio",
-        tag: "Voice & Production",
-        description: "Acoustically isolated vocal booth coaching, pitch tuning, dynamic mastering, and professional audio production.",
-        image: "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&q=80&w=600",
-        features: ["Real-Time Pitch Feedback", "Vocal Tuning & De-Essing", "Stem Master Delivery"]
-    },
-    {
-        id: 9,
-        title: "Raga Studio - Greenmate & Youtubers Suite",
-        price: "₹2,000 / hr",
-        category: "Raga Studio",
-        tag: "Creator Hub",
-        description: "Full-floor Chroma key green screen studio with 4K multi-cam capture and broadcast podcast audio setup.",
-        image: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=600",
-        features: ["Full Chroma Floor & Wall", "4K Multi-Camera Array", "Broadcast Podcast Mics"]
-    },
-    {
-        id: 10,
-        title: "Sampoorna Academy - Music Courses",
-        price: "₹3,500 / month",
-        category: "Sampoorna Academy",
-        tag: "Music Education",
-        description: "Curriculum-based courses in Vocal Singing, Keyboard, Flute, and Tabla with individual mentorship and certifications.",
-        image: "https://images.unsplash.com/photo-1520523839898-5071282543e2?auto=format&fit=crop&q=80&w=600",
-        features: ["Singing, Keyboard, Flute, Tabla", "Weekend & Weekday Batches", "Performance Certification"]
+app.get('/api/admin/auth/status', (_req, res) => {
+    const hasEnvPasscode = Boolean(process.env.ADMIN_PASSCODE && process.env.ADMIN_PASSCODE.trim().length >= 4);
+    const needsFirstRunClaim = !hasEnvPasscode && !store.adminCredential;
+    res.json({
+        needsFirstRunClaim,
+        hasEnvPasscode,
+        ownerEmailHint: OWNER_EMAIL,
+    });
+});
+
+app.post('/api/admin/auth/claim', (req, res) => {
+    const hasEnvPasscode = Boolean(process.env.ADMIN_PASSCODE && process.env.ADMIN_PASSCODE.trim().length >= 4);
+    if (hasEnvPasscode || store.adminCredential) {
+        return res.status(409).json({ error: 'Admin passcode is already configured.' });
     }
-];
+    const passcode = typeof req.body?.passcode === 'string' ? req.body.passcode.trim() : '';
+    if (passcode.length < 6) {
+        return res.status(400).json({ error: 'Choose an admin passcode of at least 6 characters.' });
+    }
+    const { salt, hash } = hashPasscode(passcode);
+    store.adminCredential = { salt, hash, createdAt: new Date().toISOString() };
+    saveStore(store);
+    res.json({ token: signAdminToken('admin-passcode'), role: 'admin' });
+});
 
-const DEFAULT_PLANS = [
-    {
-        id: "starter",
-        name: "Starter",
-        badge: "Solo Creators",
-        desc: "Essential DJ set for private home parties and intimate gatherings.",
-        price: "$199",
-        monthlyPrice: "$199",
-        period: "/ event",
-        buttonText: "Get Starter",
-        theme: "standard",
-        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
-        videos: [
-            "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4"
-        ],
-        features: [
-            { text: "3 Hours Live DJ Set", included: true },
-            { text: "Basic Sound System (1,000W)", included: true },
-            { text: "Standard Playlist Customization", included: true },
-            { text: "Dynamic Stage Lighting & FX", included: false },
-            { text: "Dedicated Sound Engineer", included: false },
-            { text: "Wireless Mic & MC Host", included: false },
-            { text: "Custom 3D Visual Projection", included: false },
-        ],
-    },
-    {
-        id: "basic",
-        name: "Basic",
-        badge: "Club Nights",
-        desc: "Ideal for medium lounge venues, birthdays, and rooftop parties.",
-        price: "$399",
-        monthlyPrice: "$399",
-        period: "/ event",
-        buttonText: "Choose Basic",
-        theme: "standard",
-        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
-        videos: [
-            "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4"
-        ],
-        features: [
-            { text: "5 Hours Live DJ Set", included: true },
-            { text: "Pro Sound System (3,000W)", included: true },
-            { text: "Standard Playlist Customization", included: true },
-            { text: "Dynamic Stage Lighting & FX", included: true },
-            { text: "Dedicated Sound Engineer", included: false },
-            { text: "Wireless Mic & MC Host", included: false },
-            { text: "Custom 3D Visual Projection", included: false },
-        ],
-    },
-    {
-        id: "standard",
-        name: "Standard",
-        badge: "Corporate Events",
-        desc: "Complete audio-visual setup for corporate events and weddings.",
-        price: "$699",
-        monthlyPrice: "$699",
-        period: "/ event",
-        buttonText: "Select Standard",
-        theme: "standard",
-        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-        videos: [
-            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4"
-        ],
-        features: [
-            { text: "7 Hours Live DJ Performance", included: true },
-            { text: "High-Impact Concert Sound (5,000W)", included: true },
-            { text: "Custom Playlist & Track Edits", included: true },
-            { text: "Dynamic Stage Lighting & FX", included: true },
-            { text: "Dedicated Sound Engineer", included: true },
-            { text: "Wireless Mic & MC Host", included: true },
-            { text: "Custom 3D Visual Projection", included: false },
-        ],
-    },
-    {
-        id: "premium",
-        name: "Premium",
-        badge: "MOST POPULAR",
-        desc: "Full-scale concert production with silver-grade audio and staging.",
-        price: "$1,299",
-        monthlyPrice: "$1,299",
-        period: "/ event",
-        buttonText: "Upgrade to Premium",
-        theme: "silver",
-        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-        videos: [
-            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-dj-mixing-music-on-stage-41339-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4"
-        ],
-        features: [
-            { text: "Full Night Live DJ Set (Up to 10h)", included: true },
-            { text: "Tour-Grade Array Sound (10,000W)", included: true },
-            { text: "Custom Playlist & Track Edits", included: true },
-            { text: "Full Moving-Head Light Show & Fog", included: true },
-            { text: "2x Sound & Lighting Engineers", included: true },
-            { text: "Dual Wireless Mics & Pro MC", included: true },
-            { text: "Custom 3D Visual Projection", included: true },
-        ],
-    },
-    {
-        id: "elite",
-        name: "Elite",
-        badge: "VIP / FESTIVAL",
-        desc: "Ultimate festival experience with top-tier gold stage production.",
-        price: "$2,499",
-        monthlyPrice: "$2,499",
-        period: "/ event",
-        buttonText: "Book Elite VIP",
-        theme: "gold",
-        videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-        videos: [
-            "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-dj-mixing-music-41337-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-laser-lights-in-a-stage-show-41551-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-41552-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-stage-lights-and-crowd-at-a-concert-41550-large.mp4",
-            "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4"
-        ],
-        features: [
-            { text: "Unlimited Performance Duration", included: true },
-            { text: "Full Line-Array Sound & Subs (25,000W)", included: true },
-            { text: "Fully Customized Live Visuals & Pyros", included: true },
-            { text: "Full Crew of Sound & Visual Directors", included: true },
-            { text: "Multi-Zone Wireless Sound & VIP Monitoring", included: true },
-            { text: "Live Instrument & DJ Collab Set", included: true },
-            { text: "Custom 3D Visual Projection", included: true },
-        ],
-    },
-];
-
-function getServices() {
-    try {
-        if (fs.existsSync(SERVICES_FILE)) {
-            const raw = fs.readFileSync(SERVICES_FILE, 'utf8');
-            return JSON.parse(raw);
+app.post('/api/admin/auth/login', (req, res) => {
+    const passcode = typeof req.body?.passcode === 'string' ? req.body.passcode.trim() : '';
+    if (!passcode) {
+        return res.status(400).json({ error: 'Passcode is required.' });
+    }
+    const envPasscode = process.env.ADMIN_PASSCODE?.trim();
+    if (envPasscode && envPasscode.length >= 4) {
+        if (!timingSafeStringEqual(passcode, envPasscode)) {
+            return res.status(401).json({ error: 'Incorrect admin passcode.' });
         }
-    } catch (e) {
-        console.error('Error reading services file:', e);
+        return res.json({ token: signAdminToken('admin-env'), role: 'admin' });
     }
-    // Initialize with defaults if file doesn't exist
-    saveServices(DEFAULT_SERVICES);
-    return DEFAULT_SERVICES;
-}
-
-function saveServices(servicesData) {
-    try {
-        fs.writeFileSync(SERVICES_FILE, JSON.stringify(servicesData, null, 2), 'utf8');
-        return true;
-    } catch (e) {
-        console.error('Error saving services file:', e);
-        return false;
+    if (!store.adminCredential) {
+        return res.status(400).json({ error: 'Please complete first-run admin setup first.' });
     }
-}
+    if (!verifyPasscode(passcode, store.adminCredential)) {
+        return res.status(401).json({ error: 'Incorrect admin passcode.' });
+    }
+    res.json({ token: signAdminToken('admin-passcode'), role: 'admin' });
+});
 
-function getPlans() {
+app.post('/api/admin/auth/google', async (req, res) => {
+    const accessToken = typeof req.body?.accessToken === 'string' ? req.body.accessToken.trim() : '';
+    if (!accessToken) {
+        return res.status(400).json({ error: 'Google access token is required.' });
+    }
     try {
-        if (fs.existsSync(PLANS_FILE)) {
-            const raw = fs.readFileSync(PLANS_FILE, 'utf8');
-            return JSON.parse(raw);
+        const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!infoRes.ok) {
+            return res.status(401).json({ error: 'Could not verify Google account session.' });
         }
-    } catch (e) {
-        console.error('Error reading plans file:', e);
+        const profile = await infoRes.json();
+        if (!profile.email || !profile.email_verified) {
+            return res.status(403).json({ error: 'Verified Google email is required.' });
+        }
+        if (profile.email.toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
+            return res.status(403).json({
+                error: `Signed in as ${profile.email}. Only the site owner (${OWNER_EMAIL}) or passcode holder can administer SS Audios.`,
+            });
+        }
+        res.json({
+            token: signAdminToken(profile.email),
+            role: 'owner',
+            email: profile.email,
+            name: profile.name || 'SS Audios Admin',
+        });
+    } catch {
+        res.status(502).json({ error: 'Unable to reach Google identity service.' });
     }
-    // Initialize with defaults if file doesn't exist
-    savePlans(DEFAULT_PLANS);
-    return DEFAULT_PLANS;
-}
+});
 
-function savePlans(plansData) {
-    try {
-        fs.writeFileSync(PLANS_FILE, JSON.stringify(plansData, null, 2), 'utf8');
-        return true;
-    } catch (e) {
-        console.error('Error saving plans file:', e);
-        return false;
+// -------------------------------------------------------------
+// Admin Catalog & Pricing Management
+// -------------------------------------------------------------
+app.put('/api/admin/dj-packages', requireAdminAuth, (req, res) => {
+    const currency = req.body?.currency === 'USD' ? 'USD' : 'INR';
+    const incoming = req.body?.djPackages;
+    if (!Array.isArray(incoming) || incoming.length !== 5) {
+        return res.status(400).json({ error: 'Exactly 5 DJ packages are required.' });
     }
-}
 
-// Database / File Sync Helpers for Services
-async function getServicesAsync() {
-    if (infrastructureReady) {
-        try {
-            const res = await docClient.scan({ TableName: SERVICES_TABLE_NAME }).promise();
-            if (res.Items && res.Items.length > 0) {
-                const items = res.Items.map(item => ({
-                    ...item,
-                    id: isNaN(item.id) ? item.id : Number(item.id)
-                })).sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-                saveServices(items);
-                return items;
+    const sanitized = [];
+    for (let i = 0; i < 5; i++) {
+        const item = incoming[i];
+        const base = (store.djPackages && store.djPackages[i]) || {};
+        const priceInr = Number(item?.priceInr);
+        const priceUsd = Number(item?.priceUsd);
+        if (!Number.isFinite(priceInr) || priceInr < 0 || !Number.isFinite(priceUsd) || priceUsd < 0) {
+            return res.status(400).json({ error: `Invalid price for package "${item?.name || i}".` });
+        }
+        sanitized.push({
+            ...base,
+            name: typeof item?.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 48) : (base.name || `Package ${i+1}`),
+            priceInr: Math.round(priceInr),
+            priceUsd: Math.round(priceUsd),
+            tagline: typeof item?.tagline === 'string' && item.tagline.trim() ? item.tagline.trim().slice(0, 120) : (base.tagline || ''),
+            unitLabel: typeof item?.unitLabel === 'string' && item.unitLabel.trim() ? item.unitLabel.trim().slice(0, 24) : (base.unitLabel || '/ event'),
+            features: Array.isArray(item?.features) ? item.features.map(f => String(f).trim()).filter(Boolean).slice(0, 12) : (base.features || []),
+            hidden: Boolean(item?.hidden),
+        });
+    }
+
+    store.currency = currency;
+    store.djPackages = sanitized;
+    saveStore(store);
+
+    // Also update plans.json for synchronization
+    const currentPlans = getPlans();
+    for (const pkg of sanitized) {
+        const match = currentPlans.find(p => p.id === pkg.id);
+        if (match) {
+            match.priceInr = pkg.priceInr;
+            match.priceUsd = pkg.priceUsd;
+            match.monthlyPrice = `₹${pkg.priceInr}`;
+            match.yearlyPrice = `$${pkg.priceUsd}`;
+            match.tagline = pkg.tagline;
+            match.features = pkg.features;
+        }
+    }
+    savePlans(currentPlans);
+
+    res.json(buildPublicPayload());
+});
+
+app.put('/api/admin/catalog', requireAdminAuth, (req, res) => {
+    const body = req.body || {};
+
+    if (body.currency === 'INR' || body.currency === 'USD') {
+        store.currency = body.currency;
+    }
+
+    if (Array.isArray(body.djPackages) && body.djPackages.length === 5) {
+        const nextDj = [];
+        for (let i = 0; i < 5; i++) {
+            const item = body.djPackages[i];
+            const base = (store.djPackages && store.djPackages[i]) || {};
+            const priceInr = Number(item?.priceInr);
+            const priceUsd = Number(item?.priceUsd);
+            if (!Number.isFinite(priceInr) || priceInr < 0 || !Number.isFinite(priceUsd) || priceUsd < 0) {
+                return res.status(400).json({ error: `Invalid price for DJ package "${item?.name || i}".` });
             }
-        } catch (dbErr) {
-            console.warn('[DynamoDB Services Scan Warning]:', dbErr.message);
+            nextDj.push({
+                ...base,
+                name: typeof item?.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 48) : base.name,
+                priceInr: Math.round(priceInr),
+                priceUsd: Math.round(priceUsd),
+                tagline: typeof item?.tagline === 'string' && item.tagline.trim() ? item.tagline.trim().slice(0, 120) : base.tagline,
+                unitLabel: typeof item?.unitLabel === 'string' && item.unitLabel.trim() ? item.unitLabel.trim().slice(0, 24) : base.unitLabel,
+                features: Array.isArray(item?.features) ? item.features.map(f => String(f).trim()).filter(Boolean).slice(0, 12) : base.features,
+                hidden: Boolean(item?.hidden),
+            });
         }
+        store.djPackages = nextDj;
     }
-    return getServices();
-}
 
-async function saveServiceToDb(service) {
-    if (infrastructureReady) {
-        try {
-            await docClient.put({
-                TableName: SERVICES_TABLE_NAME,
-                Item: {
-                    ...service,
-                    id: String(service.id)
-                }
-            }).promise();
-        } catch (dbErr) {
-            console.warn('[DynamoDB Service Put Error]:', dbErr.message);
-        }
-    }
-}
-
-async function deleteServiceFromDb(id) {
-    if (infrastructureReady) {
-        try {
-            await docClient.delete({
-                TableName: SERVICES_TABLE_NAME,
-                Key: { id: String(id) }
-            }).promise();
-        } catch (dbErr) {
-            console.warn('[DynamoDB Service Delete Error]:', dbErr.message);
-        }
-    }
-}
-
-// Database / File Sync Helpers for Plans
-async function getPlansAsync() {
-    if (infrastructureReady) {
-        try {
-            const res = await docClient.scan({ TableName: PLANS_TABLE_NAME }).promise();
-            if (res.Items && res.Items.length > 0) {
-                const items = res.Items;
-                savePlans(items);
-                return items;
+    if (Array.isArray(body.signatureServices)) {
+        const nextServices = [];
+        for (let i = 0; i < body.signatureServices.length; i++) {
+            const item = body.signatureServices[i];
+            const base = (store.signatureServices && store.signatureServices[i]) || {};
+            const startingPrice = Number(item?.startingPrice);
+            if (!Number.isFinite(startingPrice) || startingPrice < 0) {
+                return res.status(400).json({ error: `Invalid price for service "${item?.title || i}".` });
             }
-        } catch (dbErr) {
-            console.warn('[DynamoDB Plans Scan Warning]:', dbErr.message);
+            const rounded = Math.round(startingPrice);
+            nextServices.push({
+                ...base,
+                title: typeof item?.title === 'string' && item.title.trim() ? item.title.trim().slice(0, 64) : base.title,
+                startingPrice: rounded,
+                priceLabel: item?.priceLabel || `₹${rounded.toLocaleString('en-IN')}`,
+                summary: typeof item?.summary === 'string' ? item.summary.trim().slice(0, 220) : base.summary,
+                hidden: Boolean(item?.hidden),
+            });
+        }
+        store.signatureServices = nextServices;
+    }
+
+    if (Array.isArray(body.ragaStudioServices)) {
+        const nextStudio = [];
+        for (let i = 0; i < body.ragaStudioServices.length; i++) {
+            const item = body.ragaStudioServices[i];
+            const base = (store.ragaStudioServices && store.ragaStudioServices[i]) || {};
+            const priceValue = Number(item?.priceValue);
+            if (!Number.isFinite(priceValue) || priceValue < 0) {
+                return res.status(400).json({ error: `Invalid price for studio service "${item?.title || i}".` });
+            }
+            const rounded = Math.round(priceValue);
+            const unit = item?.unit || base.unit || 'hour';
+            nextStudio.push({
+                ...base,
+                title: typeof item?.title === 'string' && item.title.trim() ? item.title.trim().slice(0, 64) : base.title,
+                priceValue: rounded,
+                unit,
+                priceLabel: item?.priceLabel || `₹${rounded.toLocaleString('en-IN')}/${unit}`,
+                description: typeof item?.description === 'string' ? item.description.trim().slice(0, 260) : base.description,
+                hidden: Boolean(item?.hidden),
+            });
+        }
+        store.ragaStudioServices = nextStudio;
+    }
+
+    if (Array.isArray(body.academyCourses)) {
+        const nextCourses = [];
+        for (let i = 0; i < body.academyCourses.length; i++) {
+            const item = body.academyCourses[i];
+            const base = (store.academyCourses && store.academyCourses[i]) || {};
+            const feeMonthly = Number(item?.feeMonthly);
+            if (!Number.isFinite(feeMonthly) || feeMonthly < 0) {
+                return res.status(400).json({ error: `Invalid fee for academy course "${item?.title || i}".` });
+            }
+            const rounded = Math.round(feeMonthly);
+            nextCourses.push({
+                ...base,
+                title: typeof item?.title === 'string' && item.title.trim() ? item.title.trim().slice(0, 64) : base.title,
+                feeMonthly: rounded,
+                feeLabel: item?.feeLabel || `₹${rounded.toLocaleString('en-IN')}/month`,
+                duration: typeof item?.duration === 'string' ? item.duration.trim().slice(0, 40) : base.duration,
+                description: typeof item?.description === 'string' ? item.description.trim().slice(0, 260) : base.description,
+                hidden: Boolean(item?.hidden),
+            });
+        }
+        store.academyCourses = nextCourses;
+    }
+
+    if (body.sectionVisibility && typeof body.sectionVisibility === 'object') {
+        const v = body.sectionVisibility;
+        store.sectionVisibility = {
+            services: typeof v.services === 'boolean' ? v.services : store.sectionVisibility.services,
+            portfolio: typeof v.portfolio === 'boolean' ? v.portfolio : store.sectionVisibility.portfolio,
+            djPackages: typeof v.djPackages === 'boolean' ? v.djPackages : store.sectionVisibility.djPackages,
+            ragaStudio: typeof v.ragaStudio === 'boolean' ? v.ragaStudio : store.sectionVisibility.ragaStudio,
+            sampoornaAcademy: typeof v.sampoornaAcademy === 'boolean' ? v.sampoornaAcademy : store.sectionVisibility.sampoornaAcademy,
+        };
+    }
+
+    saveStore(store);
+    res.json(buildPublicPayload());
+});
+
+// -------------------------------------------------------------
+// Admin Portfolio & Resumable Upload Routes
+// -------------------------------------------------------------
+app.patch('/api/admin/portfolio-categories/:categoryId', requireAdminAuth, (req, res) => {
+    const category = store.portfolioCategories.find(c => c.id === req.params.categoryId);
+    if (!category) {
+        return res.status(404).json({ error: 'Portfolio category not found.' });
+    }
+
+    if (typeof req.body?.hidden === 'boolean') {
+        category.hidden = req.body.hidden;
+    }
+
+    const slotAction = req.body?.slotAction;
+    if (slotAction === 'hide-empty') {
+        for (const slot of category.slots) {
+            if (slot.status !== 'published' || !slot.videoUrl) {
+                slot.hidden = true;
+            }
+        }
+    } else if (slotAction === 'show-all') {
+        category.hidden = false;
+        for (const slot of category.slots) {
+            slot.hidden = false;
+        }
+    } else if (slotAction === 'hide-all') {
+        for (const slot of category.slots) {
+            slot.hidden = true;
         }
     }
-    return getPlans();
-}
 
-async function savePlanToDb(plan) {
+    saveStore(store);
+    res.json(buildPublicPayload());
+});
+
+app.patch('/api/admin/portfolio/:slotId', requireAdminAuth, (req, res) => {
+    const found = findSlot(req.params.slotId);
+    if (!found) {
+        return res.status(404).json({ error: 'Portfolio slot not found.' });
+    }
+    const { slot } = found;
+    if (typeof req.body?.title === 'string' && req.body.title.trim()) {
+        slot.title = req.body.title.trim().slice(0, 120);
+    }
+    if (typeof req.body?.archiveTag === 'string' && req.body.archiveTag.trim()) {
+        slot.archiveTag = req.body.archiveTag.trim().slice(0, 60);
+    }
+    if (typeof req.body?.location === 'string') {
+        slot.location = req.body.location.trim().slice(0, 60);
+    }
+    if (typeof req.body?.hidden === 'boolean') {
+        slot.hidden = req.body.hidden;
+    }
+    if (typeof req.body?.driveFileId === 'string') {
+        slot.driveFileId = req.body.driveFileId.trim() || null;
+    }
+    if (typeof req.body?.driveWebViewLink === 'string') {
+        slot.driveWebViewLink = req.body.driveWebViewLink.trim() || null;
+    }
+    slot.updatedAt = new Date().toISOString();
+    saveStore(store);
+    res.json(buildPublicPayload());
+});
+
+app.delete('/api/admin/portfolio/:slotId/video', requireAdminAuth, (req, res) => {
+    const found = findSlot(req.params.slotId);
+    if (!found) {
+        return res.status(404).json({ error: 'Portfolio slot not found.' });
+    }
+    const { slot } = found;
+    removeLocalVideoFile(slot.videoUrl);
+    removeLocalVideoFile(slot.posterUrl);
+    slot.videoUrl = null;
+    slot.posterUrl = null;
+    slot.status = 'awaiting';
+    slot.mimeType = null;
+    slot.fileSizeBytes = 0;
+    slot.updatedAt = new Date().toISOString();
+    saveStore(store);
+    res.json(buildPublicPayload());
+});
+
+// Chunked Resumable Upload: INIT
+app.post('/api/admin/uploads/init', requireAdminAuth, (req, res) => {
+    const slotId = typeof req.body?.slotId === 'string' ? req.body.slotId : '';
+    const fileName = typeof req.body?.fileName === 'string' ? req.body.fileName : 'video.mp4';
+    const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType : 'video/mp4';
+    const totalSize = Number(req.body?.totalSize);
+
+    const found = findSlot(slotId);
+    if (!found) {
+        return res.status(404).json({ error: 'Portfolio slot not found.' });
+    }
+    if (!mimeType.startsWith('video/')) {
+        return res.status(400).json({ error: 'Only video files (MP4, WebM, MOV) are supported.' });
+    }
+    if (!Number.isFinite(totalSize) || totalSize <= 0) {
+        return res.status(400).json({ error: 'Invalid file size.' });
+    }
+    if (totalSize > MAX_VIDEO_FILE_BYTES) {
+        return res.status(413).json({ error: 'Single video exceeds the 3 GiB per-video limit.' });
+    }
+
+    const stats = computeStorageStats(store.portfolioCategories);
+    const availableWithReplace = stats.remainingBytes + (found.slot.fileSizeBytes || 0);
+    if (totalSize > availableWithReplace) {
+        return res.status(413).json({
+            error: 'Upload exceeds the 5 GiB total video storage quota. Remove or replace an older video first.',
+        });
+    }
+
+    const uploadId = crypto.randomUUID();
+    const ext = sanitizeSafeSegment(path.extname(fileName).toLowerCase() || '.mp4').slice(0, 10);
+    const stem = sanitizeSafeSegment(path.basename(fileName, ext)).slice(0, 64) || 'video';
+    const safeFileName = `${Date.now()}_${stem}${ext}`;
+    const tempPath = resolveConfinedPath(TMP_UPLOADS_DIR, `${uploadId}.part`);
+    if (!tempPath) {
+        return res.status(400).json({ error: 'Invalid upload path.' });
+    }
+
+    fs.writeFileSync(tempPath, Buffer.alloc(0));
+    activeUploads.set(uploadId, {
+        uploadId,
+        slotId,
+        fileName: safeFileName,
+        mimeType,
+        totalSize,
+        receivedBytes: 0,
+        tempPath,
+        createdAt: Date.now(),
+    });
+
+    res.json({ uploadId, chunkSize: 4 * 1024 * 1024 });
+});
+
+// Chunked Resumable Upload: CHUNK
+app.put('/api/admin/uploads/:uploadId/chunk', requireAdminAuth, (req, res) => {
+    const session = activeUploads.get(req.params.uploadId);
+    if (!session) {
+        return res.status(404).json({ error: 'Upload session not found or expired.' });
+    }
+    const offset = Number(req.headers['x-upload-offset']);
+    const chunk = req.body;
+    if (!Buffer.isBuffer(chunk) || chunk.length === 0) {
+        return res.status(400).json({ error: 'Empty chunk payload.' });
+    }
+    if (!Number.isFinite(offset) || offset < 0 || offset > session.receivedBytes) {
+        return res.status(409).json({
+            error: 'Chunk offset mismatch.',
+            expectedOffset: session.receivedBytes,
+        });
+    }
+
+    const fd = fs.openSync(session.tempPath, 'r+');
+    try {
+        fs.writeSync(fd, chunk, 0, chunk.length, offset);
+    } finally {
+        fs.closeSync(fd);
+    }
+
+    session.receivedBytes = Math.max(session.receivedBytes, offset + chunk.length);
+    if (session.receivedBytes > MAX_VIDEO_FILE_BYTES) {
+        activeUploads.delete(session.uploadId);
+        try { fs.unlinkSync(session.tempPath); } catch {}
+        return res.status(413).json({ error: 'Upload exceeded 3 GiB limit.' });
+    }
+
+    res.json({ receivedBytes: session.receivedBytes, totalSize: session.totalSize });
+});
+
+// Chunked Resumable Upload: COMPLETE
+app.post('/api/admin/uploads/:uploadId/complete', requireAdminAuth, async (req, res) => {
+    const session = activeUploads.get(req.params.uploadId);
+    if (!session) {
+        return res.status(404).json({ error: 'Upload session not found.' });
+    }
+    const found = findSlot(session.slotId);
+    if (!found) {
+        activeUploads.delete(session.uploadId);
+        return res.status(404).json({ error: 'Portfolio slot not found.' });
+    }
+
+    const safeSlot = sanitizeSafeSegment(session.slotId);
+    const slotDir = resolveConfinedPath(VIDEOS_DIR, safeSlot);
+    if (!slotDir) {
+        return res.status(400).json({ error: 'Invalid slot directory path.' });
+    }
+    fs.mkdirSync(slotDir, { recursive: true });
+    const finalPath = resolveConfinedPath(slotDir, session.fileName);
+    if (!finalPath) {
+        return res.status(400).json({ error: 'Invalid destination filename.' });
+    }
+
+    removeLocalVideoFile(found.slot.videoUrl);
+    removeLocalVideoFile(found.slot.posterUrl);
+    fs.renameSync(session.tempPath, finalPath);
+    activeUploads.delete(session.uploadId);
+
+    const finalStat = fs.existsSync(finalPath) ? fs.statSync(finalPath) : { size: session.totalSize };
+    found.slot.videoUrl = `/api/media/${safeSlot}/${session.fileName}`;
+    found.slot.posterUrl = null;
+    found.slot.status = 'published';
+    found.slot.mimeType = session.mimeType;
+    found.slot.fileSizeBytes = finalStat.size;
+    if (typeof req.body?.title === 'string' && req.body.title.trim()) {
+        found.slot.title = req.body.title.trim().slice(0, 120);
+    }
+    found.slot.updatedAt = new Date().toISOString();
+    saveStore(store);
+
+    // Optional upload to AWS S3 in the background if credentials exist
     if (infrastructureReady) {
-        try {
-            await docClient.put({
-                TableName: PLANS_TABLE_NAME,
-                Item: {
-                    ...plan,
-                    id: String(plan.id || plan.name)
-                }
-            }).promise();
-        } catch (dbErr) {
-            console.warn('[DynamoDB Plan Put Error]:', dbErr.message);
-        }
-    }
-}
-
-async function deletePlanFromDb(id) {
-    if (infrastructureReady) {
-        try {
-            await docClient.delete({
-                TableName: PLANS_TABLE_NAME,
-                Key: { id: String(id) }
-            }).promise();
-        } catch (dbErr) {
-            console.warn('[DynamoDB Plan Delete Error]:', dbErr.message);
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// SERVICES REST API
-// -------------------------------------------------------------
-
-// GET all services
-app.get('/api/services', async (req, res) => {
-    try {
-        const services = await getServicesAsync();
-        res.json({
-            success: true,
-            count: services.length,
-            data: services
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to retrieve services', error: err.message });
-    }
-});
-
-// POST create a new service
-app.post('/api/services', async (req, res) => {
-    try {
-        const { title, price, category, tag, description, image, features } = req.body;
-
-        if (!title) {
-            return res.status(400).json({ success: false, message: 'Service title is required.' });
-        }
-
-        const currentServices = getServices();
-        const numericIds = currentServices.map(s => Number(s.id)).filter(n => !isNaN(n));
-        const nextId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : currentServices.length + 1;
-
-        const newService = {
-            id: nextId,
-            title: title.trim(),
-            price: price ? price.trim() : 'Contact for Quote',
-            category: category ? category.trim() : 'Live DJ',
-            tag: tag ? tag.trim() : 'DJ Experience',
-            description: description ? description.trim() : '',
-            image: image && image.trim().length > 0
-                ? image.trim()
-                : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=600',
-            features: Array.isArray(features)
-                ? features.filter(f => typeof f === 'string' && f.trim().length > 0)
-                : (typeof features === 'string' ? features.split('\n').filter(s => s.trim().length > 0) : [])
-        };
-
-        currentServices.push(newService);
-        saveServices(currentServices);
-        await saveServiceToDb(newService);
-
-        console.log(`✅ [Services] Added new service "${newService.title}" (ID: ${newService.id})`);
-
-        res.status(201).json({
-            success: true,
-            message: `Service "${newService.title}" created successfully`,
-            data: newService
-        });
-    } catch (err) {
-        console.error('Error creating service:', err);
-        res.status(500).json({ success: false, message: 'Failed to create service', error: err.message });
-    }
-});
-
-// PUT update all services
-app.put('/api/services', async (req, res) => {
-    try {
-        const updatedList = req.body;
-        if (!Array.isArray(updatedList)) {
-            return res.status(400).json({ success: false, message: 'Expected array of services.' });
-        }
-        saveServices(updatedList);
-        for (const item of updatedList) {
-            await saveServiceToDb(item);
-        }
-        res.json({
-            success: true,
-            message: 'All services updated successfully',
-            data: updatedList
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to update services', error: err.message });
-    }
-});
-
-// PUT update a single service by ID
-app.put('/api/services/:id', async (req, res) => {
-    try {
-        const id = parseInt(req.params.id, 10);
-        const currentServices = getServices();
-        const index = currentServices.findIndex(s => Number(s.id) === id);
-
-        if (index === -1) {
-            return res.status(404).json({ success: false, message: `Service with ID ${id} not found.` });
-        }
-
-        const updatedService = {
-            ...currentServices[index],
-            ...req.body,
-            id: id // preserve ID
-        };
-
-        if (Array.isArray(req.body.features)) {
-            updatedService.features = req.body.features;
-        }
-
-        currentServices[index] = updatedService;
-        saveServices(currentServices);
-        await saveServiceToDb(updatedService);
-
-        console.log(`✅ [Services] Updated service "${updatedService.title}" (ID: ${id})`);
-
-        res.json({
-            success: true,
-            message: `Service "${updatedService.title}" updated successfully`,
-            data: updatedService
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to update service', error: err.message });
-    }
-});
-
-// DELETE a service by ID
-app.delete('/api/services/:id', async (req, res) => {
-    try {
-        const id = parseInt(req.params.id, 10);
-        const currentServices = getServices();
-        const index = currentServices.findIndex(s => Number(s.id) === id);
-
-        if (index === -1) {
-            return res.status(404).json({ success: false, message: `Service with ID ${id} not found.` });
-        }
-
-        const deletedService = currentServices.splice(index, 1)[0];
-        saveServices(currentServices);
-        await deleteServiceFromDb(id);
-
-        console.log(`🗑️ [Services] Deleted service "${deletedService.title}" (ID: ${id})`);
-
-        res.json({
-            success: true,
-            message: `Service "${deletedService.title}" deleted successfully`,
-            data: deletedService
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to delete service', error: err.message });
-    }
-});
-
-// POST reset services to defaults
-app.post('/api/services/reset', async (req, res) => {
-    try {
-        saveServices(DEFAULT_SERVICES);
-        for (const item of DEFAULT_SERVICES) {
-            await saveServiceToDb(item);
-        }
-        res.json({
-            success: true,
-            message: 'Services reset to defaults',
-            data: DEFAULT_SERVICES
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to reset services', error: err.message });
-    }
-});
-
-// -------------------------------------------------------------
-// PRICING PLANS REST API
-// -------------------------------------------------------------
-
-// GET all pricing plans
-app.get('/api/plans', async (req, res) => {
-    try {
-        const plans = await getPlansAsync();
-        res.json({
-            success: true,
-            count: plans.length,
-            data: plans
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to retrieve pricing plans', error: err.message });
-    }
-});
-
-// POST create a new pricing plan
-app.post('/api/plans', async (req, res) => {
-    try {
-        const { id, name, badge, desc, price, monthlyPrice, period, buttonText, theme, features, videoUrl, videos } = req.body;
-
-        if (!name) {
-            return res.status(400).json({ success: false, message: 'Plan name is required.' });
-        }
-
-        const planId = (id || name).toLowerCase().replace(/[^a-z0-9]/g, '-');
-        const currentPlans = getPlans();
-        const planPrice = (price || monthlyPrice || '$499').trim();
-
-        const newPlan = {
-            id: planId,
-            name: name.trim(),
-            badge: badge ? badge.trim() : 'SPECIAL TIER',
-            desc: desc ? desc.trim() : '',
-            price: planPrice,
-            monthlyPrice: planPrice,
-            period: period ? period.trim() : '/ event',
-            buttonText: buttonText ? buttonText.trim() : `Choose ${name.trim()}`,
-            theme: theme ? theme.trim() : 'standard',
-            videoUrl: videoUrl ? videoUrl.trim() : "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4",
-            videos: Array.isArray(videos) && videos.length > 0 ? videos : [
-                videoUrl ? videoUrl.trim() : "https://assets.mixkit.co/videos/preview/mixkit-dj-playing-music-at-a-party-41338-large.mp4"
-            ],
-            features: Array.isArray(features) ? features : [
-                { text: "Live DJ Performance", included: true },
-                { text: "Pro Sound Array", included: true },
-                { text: "Stage Lighting & FX", included: true }
-            ]
-        };
-
-        currentPlans.push(newPlan);
-        savePlans(currentPlans);
-        await savePlanToDb(newPlan);
-
-        console.log(`✅ [Plans] Added new plan "${newPlan.name}" (ID: ${newPlan.id})`);
-
-        res.status(201).json({
-            success: true,
-            message: `Pricing plan "${newPlan.name}" created successfully`,
-            data: newPlan
-        });
-    } catch (err) {
-        console.error('Error creating plan:', err);
-        res.status(500).json({ success: false, message: 'Failed to create pricing plan', error: err.message });
-    }
-});
-
-// PUT update all plans
-app.put('/api/plans', async (req, res) => {
-    try {
-        const updatedPlans = req.body;
-        if (!Array.isArray(updatedPlans)) {
-            return res.status(400).json({ success: false, message: 'Expected array of plans.' });
-        }
-        savePlans(updatedPlans);
-        for (const item of updatedPlans) {
-            await savePlanToDb(item);
-        }
-        res.json({
-            success: true,
-            message: 'Pricing plans updated successfully',
-            data: updatedPlans
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to update pricing plans', error: err.message });
-    }
-});
-
-// PUT update a single plan by ID or Name
-app.put('/api/plans/:id', async (req, res) => {
-    try {
-        const idOrName = req.params.id.toLowerCase();
-        const currentPlans = getPlans();
-        const index = currentPlans.findIndex(p => (p.id && p.id.toLowerCase() === idOrName) || (p.name && p.name.toLowerCase() === idOrName));
-
-        if (index === -1) {
-            return res.status(404).json({ success: false, message: `Plan "${req.params.id}" not found.` });
-        }
-
-        const updatedPlan = {
-            ...currentPlans[index],
-            ...req.body
-        };
-
-        currentPlans[index] = updatedPlan;
-        savePlans(currentPlans);
-        await savePlanToDb(updatedPlan);
-
-        console.log(`✅ [Plans] Updated plan "${updatedPlan.name}"`);
-
-        res.json({
-            success: true,
-            message: `Plan "${updatedPlan.name}" updated successfully`,
-            data: updatedPlan
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to update plan', error: err.message });
-    }
-});
-
-// DELETE a pricing plan by ID or Name
-app.delete('/api/plans/:id', async (req, res) => {
-    try {
-        const idOrName = req.params.id.toLowerCase();
-        const currentPlans = getPlans();
-        const index = currentPlans.findIndex(p => (p.id && p.id.toLowerCase() === idOrName) || (p.name && p.name.toLowerCase() === idOrName));
-
-        if (index === -1) {
-            return res.status(404).json({ success: false, message: `Plan "${req.params.id}" not found.` });
-        }
-
-        const deletedPlan = currentPlans.splice(index, 1)[0];
-        savePlans(currentPlans);
-        await deletePlanFromDb(deletedPlan.id || idOrName);
-
-        console.log(`🗑️ [Plans] Deleted plan "${deletedPlan.name}"`);
-
-        res.json({
-            success: true,
-            message: `Plan "${deletedPlan.name}" deleted successfully`,
-            data: deletedPlan
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to delete plan', error: err.message });
-    }
-});
-
-// POST reset plans to defaults
-app.post('/api/plans/reset', async (req, res) => {
-    try {
-        savePlans(DEFAULT_PLANS);
-        for (const item of DEFAULT_PLANS) {
-            await savePlanToDb(item);
-        }
-        res.json({
-            success: true,
-            message: 'Pricing plans reset to defaults',
-            data: DEFAULT_PLANS
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to reset plans', error: err.message });
-    }
-});
-
-function getInquiries() {
-    try {
-        if (fs.existsSync(INQUIRIES_FILE)) {
-            const raw = fs.readFileSync(INQUIRIES_FILE, 'utf8');
-            return JSON.parse(raw);
-        }
-    } catch (e) {
-        console.error('Error reading inquiries file:', e);
-    }
-    return [];
-}
-
-function saveInquiries(inquiriesData) {
-    try {
-        fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(inquiriesData, null, 2), 'utf8');
-        return true;
-    } catch (e) {
-        console.error('Error saving inquiries file:', e);
-        return false;
-    }
-}
-
-async function saveInquiryToDb(inquiry) {
-    if (infrastructureReady) {
-        try {
-            await docClient.put({
-                TableName: INQUIRIES_TABLE_NAME,
-                Item: inquiry
-            }).promise();
-        } catch (dbErr) {
-            console.warn('[DynamoDB Inquiry Put Error]:', dbErr.message);
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// INQUIRIES REST API
-// -------------------------------------------------------------
-
-// GET all booking inquiries
-app.get('/api/inquiries', async (req, res) => {
-    try {
-        let items = [];
-        if (infrastructureReady) {
+        (async () => {
             try {
-                const dbRes = await docClient.scan({ TableName: INQUIRIES_TABLE_NAME }).promise();
-                if (dbRes.Items && dbRes.Items.length > 0) {
-                    items = dbRes.Items;
-                }
-            } catch (err) {
-                console.warn('[DynamoDB Inquiries Scan Warning]:', err.message);
-            }
-        }
-        if (items.length === 0) {
-            items = getInquiries();
-        }
-        items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        res.json({
-            success: true,
-            count: items.length,
-            data: items
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to retrieve inquiries', error: err.message });
-    }
-});
-
-// DELETE an inquiry by ID
-app.delete('/api/inquiries/:id', async (req, res) => {
-    try {
-        const id = req.params.id;
-        const currentInquiries = getInquiries();
-        const filtered = currentInquiries.filter(inq => inq.id !== id);
-        saveInquiries(filtered);
-
-        if (infrastructureReady) {
-            try {
-                await docClient.delete({
-                    TableName: INQUIRIES_TABLE_NAME,
-                    Key: { id }
+                const s3Key = `portfolio/${safeSlot}/${session.fileName}`;
+                await s3.upload({
+                    Bucket: BUCKET_NAME,
+                    Key: s3Key,
+                    Body: fs.createReadStream(finalPath),
+                    ContentType: session.mimeType,
                 }).promise();
-            } catch (dbErr) {
-                console.warn('[DynamoDB Inquiry Delete Error]:', dbErr.message);
+                console.log(`✅ [S3 Vault] Uploaded ${found.slot.id} video to S3 key: ${s3Key}`);
+            } catch (s3Err) {
+                console.warn('[S3 Background Upload Notice]:', s3Err.message);
             }
-        }
-
-        res.json({ success: true, message: 'Inquiry removed successfully' });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to delete inquiry', error: err.message });
+        })();
     }
+
+    res.json({
+        slot: found.slot,
+        siteData: buildPublicPayload(),
+    });
 });
 
-// POST bulk delete inquiries
-app.post('/api/inquiries/bulk-delete', async (req, res) => {
+app.post('/api/admin/portfolio/:slotId/assign-ai-video', requireAdminAuth, (req, res) => {
+    const found = findSlot(req.params.slotId);
+    if (!found) {
+        return res.status(404).json({ error: 'Portfolio slot not found.' });
+    }
+    const sourceUrl = typeof req.body?.videoUrl === 'string' ? req.body.videoUrl : '';
+    if (!sourceUrl.startsWith('/api/media/ai_generated/')) {
+        return res.status(400).json({ error: 'Invalid AI video reference URL.' });
+    }
+    const fileName = sanitizeSafeSegment(sourceUrl.replace('/api/media/ai_generated/', ''));
+    const srcPath = resolveConfinedPath(VIDEOS_DIR, 'ai_generated', fileName);
+    if (!srcPath || !fs.existsSync(srcPath)) {
+        return res.status(404).json({ error: 'Generated video file not found.' });
+    }
+    const safeSlot = sanitizeSafeSegment(req.params.slotId);
+    const destDir = resolveConfinedPath(VIDEOS_DIR, safeSlot);
+    if (!destDir) {
+        return res.status(400).json({ error: 'Invalid destination directory.' });
+    }
+    fs.mkdirSync(destDir, { recursive: true });
+    const destPath = resolveConfinedPath(destDir, fileName);
+    if (!destPath) {
+        return res.status(400).json({ error: 'Invalid destination filename.' });
+    }
+    removeLocalVideoFile(found.slot.videoUrl);
+    fs.copyFileSync(srcPath, destPath);
+    const stat = fs.statSync(destPath);
+    found.slot.videoUrl = `/api/media/${safeSlot}/${fileName}`;
+    found.slot.status = 'published';
+    found.slot.mimeType = 'video/mp4';
+    found.slot.fileSizeBytes = stat.size;
+    found.slot.updatedAt = new Date().toISOString();
+    saveStore(store);
+    res.json(buildPublicPayload());
+});
+
+// -------------------------------------------------------------
+// Google Gemini AI Endpoints
+// -------------------------------------------------------------
+
+// 1. Quick Advisor (gemini-2.5-flash / gemini-3.1-flash-lite)
+app.post('/api/ai/quick-advisor', async (req, res) => {
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+    if (!prompt) {
+        return res.status(400).json({ error: 'Please enter a question.' });
+    }
     try {
-        const { ids } = req.body;
-        let currentInquiries = getInquiries();
-
-        if (Array.isArray(ids) && ids.length > 0) {
-            currentInquiries = currentInquiries.filter(inq => !ids.includes(inq.id));
-            if (infrastructureReady) {
-                for (const id of ids) {
-                    try {
-                        await docClient.delete({ TableName: INQUIRIES_TABLE_NAME, Key: { id } }).promise();
-                    } catch (e) {}
-                }
-            }
-        } else {
-            // Delete all
-            if (infrastructureReady) {
-                for (const inq of currentInquiries) {
-                    try {
-                        await docClient.delete({ TableName: INQUIRIES_TABLE_NAME, Key: { id: inq.id } }).promise();
-                    } catch (e) {}
-                }
-            }
-            currentInquiries = [];
-        }
-
-        saveInquiries(currentInquiries);
-        res.json({ success: true, message: 'Inquiries deleted successfully' });
+        const ai = await getGeminiClient();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: `You are the fast booking & audio concierge for SS Audios (www.ssaudios.in, Erode, Tamil Nadu, WhatsApp +91 99653 68899).
+Offer concise, accurate answers in under 120 words using Indian Rupees (₹):
+- Signature Services: ${store.signatureServices.filter(s => !s.hidden).map(s => `${s.title} ${s.priceLabel}`).join(', ')}.
+- DJ Packages: ${store.djPackages.filter(p => !p.hidden).map(p => `${p.name} ₹${p.priceInr} (${p.durationLabel}, ${p.powerRating})`).join(', ')}.
+- Raga Studio: ${store.ragaStudioServices.filter(s => !s.hidden).map(s => `${s.title} ${s.priceLabel}`).join(', ')}.
+- Sampoorna Music Academy: ${store.academyCourses.filter(c => !c.hidden).map(c => `${c.title} ${c.feeLabel}`).join(', ')}.`,
+            },
+        });
+        res.json({ text: response.text || 'No response generated.' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to bulk delete inquiries', error: err.message });
+        const parsed = parseGeminiError(err);
+        res.status(parsed.status).json({ error: parsed.message });
     }
 });
 
-// Contact Form Email & Booking Endpoint (Non-blocking with local + cloud persistence)
+// 2. Event Production Blueprint
+app.post('/api/ai/event-blueprint', async (req, res) => {
+    const eventBrief = typeof req.body?.eventBrief === 'string' ? req.body.eventBrief.trim() : '';
+    const guestCount = typeof req.body?.guestCount === 'string' ? req.body.guestCount.trim() : '300';
+    const venueType = typeof req.body?.venueType === 'string' ? req.body.venueType.trim() : 'Indoor Marriage Hall';
+    if (!eventBrief) {
+        return res.status(400).json({ error: 'Please describe your event requirements.' });
+    }
+    try {
+        const ai = await getGeminiClient();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Design a detailed, realistic technical audio, lighting, orchestra/DJ cue sheet, and budget breakdown in Indian Rupees (₹) for this SS Audios event brief:
+Event Brief: ${eventBrief}
+Expected Guests: ${guestCount}
+Venue Type: ${venueType}
+
+Include:
+1. Recommended SS Audios Services & DJ Package tier (with realistic wattage & speaker placement).
+2. Lighting & Visual Rig Blueprint (moving heads, pathway lighting, LED visuals).
+3. Hour-by-hour run-of-show audio cue timeline.
+4. Estimated investment breakdown in ₹ (INR) referencing SS Audios rates.`,
+            config: {
+                systemInstruction:
+                    'You are the Chief Acoustic & Stage Production Director at SS Audios in Erode, Tamil Nadu. Deliver clear, actionable production plans in clean Markdown.',
+            },
+        });
+        res.json({ text: response.text || 'No blueprint generated.' });
+    } catch (err) {
+        const parsed = parseGeminiError(err);
+        res.status(parsed.status).json({ error: parsed.message });
+    }
+});
+
+// 3. Venue Grounding Search
+app.post('/api/ai/venue-grounding', async (req, res) => {
+    const query = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
+    if (!query) {
+        return res.status(400).json({ error: 'Please enter a venue or location query.' });
+    }
+    try {
+        const ai = await getGeminiClient();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `${query}. Focus on event venues, marriage halls, auditoriums, or SS Audios location details around Erode, Tamil Nadu unless another city is explicitly named. Note acoustic/event suitability where helpful.`,
+        });
+        res.json({
+            text: response.text || 'No venue details found.',
+            places: [],
+        });
+    } catch (err) {
+        const parsed = parseGeminiError(err);
+        res.status(parsed.status).json({ error: parsed.message });
+    }
+});
+
+// 4. Image Creation & Editing
+app.post('/api/ai/image-create-edit', async (req, res) => {
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+    if (!prompt) {
+        return res.status(400).json({ error: 'Please provide an image prompt.' });
+    }
+    try {
+        const ai = await getGeminiClient();
+        const response = await ai.models.generateContent({
+            model: 'imagen-3.0-generate-002',
+            contents: prompt,
+        });
+        let imageUrl = null;
+        for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+            if (part.inlineData?.data) {
+                const outMime = part.inlineData.mimeType || 'image/png';
+                imageUrl = `data:${outMime};base64,${part.inlineData.data}`;
+            }
+        }
+        if (!imageUrl) {
+            return res.status(500).json({ error: 'Model did not return an image. Try refining your prompt.' });
+        }
+        res.json({ imageUrl, caption: prompt });
+    } catch (err) {
+        const parsed = parseGeminiError(err);
+        res.status(parsed.status).json({ error: parsed.message });
+    }
+});
+
+// 5. High-Quality Image Generation
+app.post('/api/ai/image-hq', async (req, res) => {
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+    if (!prompt) {
+        return res.status(400).json({ error: 'Please provide a visual prompt.' });
+    }
+    try {
+        const ai = await getGeminiClient();
+        const response = await ai.models.generateContent({
+            model: 'imagen-3.0-generate-002',
+            contents: prompt,
+        });
+        let imageUrl = null;
+        for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+            if (part.inlineData?.data) {
+                const outMime = part.inlineData.mimeType || 'image/png';
+                imageUrl = `data:${outMime};base64,${part.inlineData.data}`;
+            }
+        }
+        if (!imageUrl) {
+            return res.status(500).json({ error: 'High-resolution image was not returned.' });
+        }
+        res.json({ imageUrl, caption: prompt, imageSize: '1K' });
+    } catch (err) {
+        const parsed = parseGeminiError(err);
+        res.status(parsed.status).json({ error: parsed.message });
+    }
+});
+
+// 6. Photo Animation / Veo Video Generation
+app.post('/api/ai/animate-video', async (req, res) => {
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+    const imageBase64 = typeof req.body?.imageBase64 === 'string' ? req.body.imageBase64 : '';
+    if (!imageBase64 || !prompt) {
+        return res.status(400).json({ error: 'Both image and motion prompt are required.' });
+    }
+    res.status(501).json({
+        error: 'Veo video generation requires access to Veo video models in your Google Cloud project.',
+    });
+});
+
+// -------------------------------------------------------------
+// Booking Inquiries & Luxury Email Notifications (/api/contact)
+// -------------------------------------------------------------
 app.post('/api/contact', async (req, res) => {
     try {
-        const { fullName, email, phone, corporateName, eventType, services, message } = req.body;
+        const body = req.body || {};
+        const fullName = (body.fullName || '').trim();
+        const email = (body.email || '').trim();
+        const phone = (body.phone || body.mobile || '').trim();
+        const category = (body.category || 'SS Audios – Event & Entertainment').trim();
+        const service = (body.service || (Array.isArray(body.services) ? body.services.join(', ') : 'General Enquiry')).trim();
+        const venue = (body.venue || '').trim();
+        const date = (body.date || '').trim();
+        const time = (body.time || '').trim();
+        const audience = (body.audience || '').trim();
+        const budget = (body.budget || '').trim();
+        const sessionDuration = (body.sessionDuration || '').trim();
+        const recordingRequirements = (body.recordingRequirements || '').trim();
+        const preferredBatch = (body.preferredBatch || '').trim();
+        const learningLevel = (body.learningLevel || '').trim();
+        const additionalRequirements = (body.additionalRequirements || body.message || '').trim();
+        const corporateName = (body.corporateName || body.eventType || category).trim();
 
-        if (!fullName || !email) {
-            return res.status(400).json({ success: false, message: 'Full name and email are required.' });
+        if (!fullName) {
+            return res.status(400).json({ success: false, message: 'Your name is required.' });
         }
 
-        const orgName = (corporateName || eventType || 'Corporate / Client Event').trim();
-
-        const selectedServices = Array.isArray(services) && services.length > 0
-            ? services.join(', ')
-            : 'None specified';
-
-        // 1. Create and persist inquiry immediately
         const newInquiry = {
             id: `inq_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-            fullName: fullName.trim(),
-            email: email.trim(),
-            phone: phone ? phone.trim() : '',
-            corporateName: orgName,
-            eventType: orgName,
-            services: Array.isArray(services) ? services : [],
-            message: message ? message.trim() : '',
+            fullName,
+            email: email || 'Not provided',
+            phone: phone || 'Not provided',
+            category,
+            service,
+            venue: venue || 'Not specified',
+            date: date || 'Flexible',
+            time: time || 'Flexible',
+            audience: audience || 'Not specified',
+            budget: budget || 'Standard',
+            sessionDuration,
+            recordingRequirements,
+            preferredBatch,
+            learningLevel,
+            additionalRequirements,
+            corporateName,
             createdAt: new Date().toISOString(),
-            status: 'new'
+            status: 'new',
         };
 
         const currentInquiries = getInquiries();
         currentInquiries.unshift(newInquiry);
         saveInquiries(currentInquiries);
-        await saveInquiryToDb(newInquiry);
 
-        console.log(`📥 [Inquiry Saved] ID: ${newInquiry.id} from ${newInquiry.fullName} (${orgName} • ${newInquiry.email})`);
+        if (infrastructureReady) {
+            docClient.put({
+                TableName: INQUIRIES_TABLE_NAME,
+                Item: {
+                    ...newInquiry,
+                    id: String(newInquiry.id)
+                }
+            }).promise().catch(dbErr => console.warn('[DynamoDB Inquiry Error]:', dbErr.message));
+        }
 
-        const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
-        const whatsappUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi ${fullName}, thank you for contacting SS Audios! We received your booking inquiry for ${orgName}.`)}` : null;
+        console.log(`📥 [Inquiry Recorded] ${fullName} · ${category} · ${service} (${phone})`);
 
         // Format timestamp in Indian Standard Time (Asia/Kolkata)
         const istFormattedTime = new Date().toLocaleString('en-IN', {
@@ -1413,12 +1401,17 @@ app.post('/api/contact', async (req, res) => {
             timeStyle: 'medium'
         }) + ' IST';
 
-        // 2. Luxury Dark-Themed HTML Email Template
+        const cleanPhone = phone.replace(/[^0-9]/g, '');
+        const whatsappReplyUrl = cleanPhone.length >= 10
+            ? `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : '91' + cleanPhone}?text=${encodeURIComponent(`Hello ${fullName}, thank you for contacting SS Audios regarding "${service}". We would love to confirm your event details.`)}`
+            : null;
+
+        // Luxury Dark-Themed Email Notification for SS Audios Admin
         const mailOptions = {
             from: `"SS Audios Inquiries" <${process.env.EMAIL_USER || 'ssaudios25@gmail.com'}>`,
-            to: process.env.EMAIL_USER || 'ssaudios25@gmail.com',
-            replyTo: email,
-            subject: `🎧 [SS Audios Lead] ${orgName} • ${fullName}`,
+            to: `${process.env.EMAIL_USER || 'ssaudios25@gmail.com'}, ${OWNER_EMAIL}`,
+            replyTo: email && email.includes('@') ? email : undefined,
+            subject: `🎧 [SS Audios Booking] ${service} • ${fullName} (${date || 'Event Lead'})`,
             html: `
                 <!DOCTYPE html>
                 <html>
@@ -1428,104 +1421,110 @@ app.post('/api/contact', async (req, res) => {
                 </head>
                 <body style="margin: 0; padding: 20px; background-color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #FDFDFC;">
                     <div style="max-width: 600px; margin: 0 auto; background: linear-gradient(180deg, #0c0c0c 0%, #000000 100%); border: 1px solid #222222; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
-                        
-                        <!-- Top Accent Banner -->
-                        <div style="background: linear-gradient(90deg, #E04B0A 0%, #FF5D16 50%, #E04B0A 100%); height: 6px;"></div>
-                        
-                        <!-- Header Section -->
+                        <div style="background: linear-gradient(90deg, #E04B0A 0%, #FF5A1F 50%, #E04B0A 100%); height: 6px;"></div>
                         <div style="padding: 28px 28px 20px 28px; text-align: center; border-bottom: 1px solid #222222;">
-                            <div style="display: inline-block; padding: 4px 14px; background: rgba(255, 93, 22, 0.15); border: 1px solid rgba(255, 93, 22, 0.4); border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #FF5D16; margin-bottom: 12px;">
+                            <div style="display: inline-block; padding: 4px 14px; background: rgba(255, 90, 31, 0.15); border: 1px solid rgba(255, 90, 31, 0.4); border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #FF5A1F; margin-bottom: 12px;">
                                 🎧 New Booking Inquiry
                             </div>
                             <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; text-transform: uppercase; color: #FDFDFC;">
-                                SS <span style="color: #FF5D16;">Audios</span>
+                                SS <span style="color: #FF5A1F;">Audios</span>
                             </h1>
                             <p style="margin: 6px 0 0 0; font-size: 13px; color: #9E9E9E;">
-                                Live Concert Sound, DJ & Stage Production Leads
+                                Live Concert Sound, DJ Events, Raga Studio & Sampoorna Academy
                             </p>
                         </div>
 
-                        <!-- Client Summary Card -->
                         <div style="padding: 24px 28px;">
                             <div style="background: #0f0f0f; border: 1px solid #222222; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                                     <div>
-                                        <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #9E9E9E; letter-spacing: 1px;">Client Name</span>
+                                        <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #9E9E9E; letter-spacing: 1px;">Customer Name</span>
                                         <h2 style="margin: 4px 0 0 0; font-size: 22px; font-weight: 800; color: #FFFFFF;">${fullName}</h2>
                                     </div>
                                     <div style="text-align: right;">
-                                        <span style="display: inline-block; padding: 4px 12px; background: #E04B0A; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; border-radius: 8px;">
-                                            ${orgName}
+                                        <span style="display: inline-block; padding: 4px 12px; background: #FF5A1F; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; border-radius: 8px;">
+                                            ${category}
                                         </span>
                                     </div>
                                 </div>
 
                                 <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #FDFDFC;">
                                     <tr>
-                                        <td style="padding: 8px 0; color: #9E9E9E; width: 35%; font-weight: 600;">🏢 Corporate / Org:</td>
-                                        <td style="padding: 8px 0; font-weight: bold; color: #FFFFFF;">${orgName}</td>
+                                        <td style="padding: 8px 0; color: #9E9E9E; width: 38%; font-weight: 600;">⚡ Requested Service:</td>
+                                        <td style="padding: 8px 0; color: #FF5A1F; font-weight: bold;">${service}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding: 8px 0; color: #9E9E9E; width: 35%; font-weight: 600;">✉️ Email:</td>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">📞 Mobile Number:</td>
+                                        <td style="padding: 8px 0; font-weight: bold; color: #FFFFFF;">
+                                            ${phone ? `<a href="tel:${phone}" style="color: #FFFFFF; text-decoration: none;">${phone}</a>` : 'Not provided'}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">✉️ Email Address:</td>
                                         <td style="padding: 8px 0; font-weight: bold;">
-                                            <a href="mailto:${email}" style="color: #FF5D16; text-decoration: none;">${email}</a>
+                                            ${email ? `<a href="mailto:${email}" style="color: #FF5A1F; text-decoration: none;">${email}</a>` : 'Not provided'}
                                         </td>
                                     </tr>
+                                    ${date ? `
                                     <tr>
-                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">📞 Phone:</td>
-                                        <td style="padding: 8px 0; font-weight: bold; color: #FDFDFC;">
-                                            ${phone ? `<a href="tel:${phone}" style="color: #FDFDFC; text-decoration: none;">${phone}</a>` : '<span style="color: #666666;">Not provided</span>'}
-                                        </td>
-                                    </tr>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">📅 Date & Time:</td>
+                                        <td style="padding: 8px 0; font-weight: bold; color: #FFFFFF;">${date} ${time ? '· ' + time : ''}</td>
+                                    </tr>` : ''}
+                                    ${venue ? `
                                     <tr>
-                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">⚡ Requested Services:</td>
-                                        <td style="padding: 8px 0; color: #FF5D16; font-weight: bold;">${selectedServices}</td>
-                                    </tr>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">📍 Venue / Hall:</td>
+                                        <td style="padding: 8px 0; font-weight: bold; color: #FFFFFF;">${venue}</td>
+                                    </tr>` : ''}
+                                    ${audience ? `
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">👥 Expected Audience:</td>
+                                        <td style="padding: 8px 0; font-weight: bold; color: #FFFFFF;">${audience} guests</td>
+                                    </tr>` : ''}
+                                    ${budget ? `
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">💰 Budget Range:</td>
+                                        <td style="padding: 8px 0; font-weight: bold; color: #FFFFFF;">${budget}</td>
+                                    </tr>` : ''}
                                     <tr>
                                         <td style="padding: 8px 0; color: #9E9E9E; font-weight: 600;">🕒 Received (IST):</td>
-                                        <td style="padding: 8px 0; color: #FDFDFC; font-size: 12px; font-weight: bold;">${istFormattedTime}</td>
+                                        <td style="padding: 8px 0; color: #9E9E9E; font-size: 12px;">${istFormattedTime}</td>
                                     </tr>
                                 </table>
                             </div>
 
-                            <!-- Message Box -->
-                            <div style="background: #000000; border-left: 4px solid #FF5D16; border-radius: 0 12px 12px 0; padding: 18px; margin-bottom: 24px; border-top: 1px solid #222222; border-right: 1px solid #222222; border-bottom: 1px solid #222222;">
+                            ${additionalRequirements ? `
+                            <div style="background: #000000; border-left: 4px solid #FF5A1F; border-radius: 0 12px 12px 0; padding: 18px; margin-bottom: 24px; border-top: 1px solid #222222; border-right: 1px solid #222222; border-bottom: 1px solid #222222;">
                                 <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #9E9E9E; margin-bottom: 8px;">
-                                    📝 Message / Special Requirements:
+                                    📝 Requirements / Notes:
                                 </div>
                                 <div style="font-size: 14px; line-height: 1.6; color: #EBEBEB; white-space: pre-wrap;">
-                                    ${message ? message.replace(/\n/g, '<br/>') : '<em style="color: #737373;">No additional message specified by client.</em>'}
+                                    ${additionalRequirements.replace(/\n/g, '<br/>')}
                                 </div>
-                            </div>
+                            </div>` : ''}
 
-                            <!-- Quick Action Buttons -->
                             <div style="text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #222222;">
-                                ${whatsappUrl ? `
-                                    <a href="${whatsappUrl}" style="display: inline-block; background-color: #25D366; color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
-                                        💬 Reply on WhatsApp
-                                    </a>
-                                ` : ''}
-                                <a href="mailto:${email}?subject=SS%20Audios%20Booking%20Inquiry%20Response" style="display: inline-block; background: linear-gradient(90deg, #E04B0A 0%, #FF5D16 100%); color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
+                                ${whatsappReplyUrl ? `
+                                <a href="${whatsappReplyUrl}" style="display: inline-block; background-color: #25D366; color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    💬 Reply on WhatsApp
+                                </a>` : ''}
+                                ${email && email.includes('@') ? `
+                                <a href="mailto:${email}?subject=SS%20Audios%20Booking%20Confirmation" style="display: inline-block; background: linear-gradient(90deg, #E04B0A 0%, #FF5A1F 100%); color: #FFFFFF; padding: 12px 22px; margin: 6px; border-radius: 10px; font-size: 13px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
                                     ✉️ Reply via Email
-                                </a>
+                                </a>` : ''}
                             </div>
-
                         </div>
 
-                        <!-- Footer -->
                         <div style="background: #000000; padding: 16px 28px; text-align: center; border-top: 1px solid #222222; font-size: 11px; color: #666666;">
-                            Sent automatically from <strong>SS Audios Web Application</strong> • All rights reserved.
+                            Sent automatically from <strong>SS Audios Web Application</strong> (Erode, Tamil Nadu) • All rights reserved.
                         </div>
-
                     </div>
                 </body>
                 </html>
             `
         };
 
-        // 3. Dispatch Email: Resend HTTPS API (Port 443 for Railway/Vercel) + Nodemailer SMTP (Localhost)
+        // Dispatch email via Resend HTTPS (Port 443) or Nodemailer SMTP (Localhost)
         (async () => {
-            const destEmail = process.env.EMAIL_USER || 'ssaudios25@gmail.com';
             const resendKey = process.env.RESEND_API_KEY;
             let sentViaResend = false;
 
@@ -1538,64 +1537,262 @@ app.post('/api/contact', async (req, res) => {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            from: 'Soundscape Inquiries <onboarding@resend.dev>',
-                            to: [destEmail],
-                            reply_to: email,
+                            from: 'SS Audios Inquiries <onboarding@resend.dev>',
+                            to: [process.env.EMAIL_USER || 'ssaudios25@gmail.com'],
+                            reply_to: email && email.includes('@') ? email : undefined,
                             subject: mailOptions.subject,
-                            html: mailOptions.html
+                            html: mailOptions.html,
                         })
                     });
                     const resendData = await resendRes.json();
                     if (resendRes.ok) {
-                        console.log(`✅ [Resend HTTPS] Booking email delivered to ${destEmail} (ID: ${resendData.id})`);
+                        console.log(`✅ [Resend HTTPS] Booking notification delivered (ID: ${resendData.id})`);
                         sentViaResend = true;
-                    } else {
-                        console.warn(`⚠️ [Resend Notice]:`, resendData.message || resendData);
                     }
                 } catch (resendErr) {
-                    console.warn(`⚠️ [Resend Error]:`, resendErr.message);
+                    console.warn('[Resend Notice]:', resendErr.message);
                 }
             }
 
-            // Fallback to Nodemailer SMTP (Localhost)
             if (!sentViaResend) {
                 transporter.sendMail(mailOptions)
-                    .then(info => console.log(`✅ [Nodemailer] Booking email sent for ${fullName} (${email}) to ${mailOptions.to} (Message ID: ${info.messageId})`))
-                    .catch(mailErr => console.error(`❌ [Nodemailer Notice]:`, mailErr.message));
+                    .then(info => console.log(`✅ [Nodemailer] Booking email sent (ID: ${info.messageId})`))
+                    .catch(mailErr => console.warn('[Nodemailer Notice]:', mailErr.message));
             }
         })();
 
-        // Return immediate success to user
-        return res.json({
+        res.json({
             success: true,
-            message: 'Thank you! Your booking request has been delivered to our team.',
-            inquiryId: newInquiry.id
+            message: 'Thank you! Your booking enquiry has been recorded with SS Audios.',
+            inquiryId: newInquiry.id,
         });
     } catch (err) {
-        console.error('❌ Error handling contact request:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to record booking request. Please try again.',
-            error: err.message
-        });
+        console.error('Error handling contact submission:', err);
+        res.status(500).json({ success: false, message: 'Failed to process inquiry.', error: err.message });
     }
 });
 
-// Start Server locally when not running inside Vercel Serverless
+// Inquiries Admin Endpoints
+app.get('/api/inquiries', async (req, res) => {
+    try {
+        const inquiries = getInquiries();
+        inquiries.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        res.json({ success: true, count: inquiries.length, data: inquiries });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to retrieve inquiries.', error: err.message });
+    }
+});
+
+app.delete('/api/inquiries/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        let inquiries = getInquiries();
+        inquiries = inquiries.filter(i => i.id !== id);
+        saveInquiries(inquiries);
+
+        if (infrastructureReady) {
+            docClient.delete({ TableName: INQUIRIES_TABLE_NAME, Key: { id } }).promise().catch(() => {});
+        }
+        res.json({ success: true, message: 'Inquiry deleted successfully.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to delete inquiry.', error: err.message });
+    }
+});
+
+app.post('/api/inquiries/bulk-delete', async (req, res) => {
+    try {
+        const { ids } = req.body;
+        let currentInquiries = getInquiries();
+        if (Array.isArray(ids) && ids.length > 0) {
+            currentInquiries = currentInquiries.filter(i => !ids.includes(i.id));
+        } else {
+            currentInquiries = [];
+        }
+        saveInquiries(currentInquiries);
+        res.json({ success: true, message: 'Inquiries deleted successfully.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to bulk delete inquiries.', error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// Legacy Services & Plans REST API (Full Backward Compatibility)
+// -------------------------------------------------------------
+app.get('/api/services', async (_req, res) => {
+    try {
+        const services = getServices();
+        res.json({ success: true, count: services.length, data: services });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to retrieve services', error: err.message });
+    }
+});
+
+app.post('/api/services', async (req, res) => {
+    try {
+        const { title, price, category, tag, description, image, features } = req.body;
+        if (!title) return res.status(400).json({ success: false, message: 'Service title is required.' });
+
+        const currentServices = getServices();
+        const numericIds = currentServices.map(s => Number(s.id)).filter(n => !isNaN(n));
+        const nextId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : currentServices.length + 1;
+
+        const newService = {
+            id: nextId,
+            title: title.trim(),
+            price: price ? price.trim() : 'Contact for Quote',
+            category: category ? category.trim() : 'SS Audios – Event & Entertainment',
+            tag: tag ? tag.trim() : 'Live Sound',
+            description: description ? description.trim() : '',
+            image: image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=600',
+            features: Array.isArray(features) ? features : [],
+        };
+
+        currentServices.push(newService);
+        saveServices(currentServices);
+
+        if (infrastructureReady) {
+            docClient.put({ TableName: SERVICES_TABLE_NAME, Item: { ...newService, id: String(newService.id) } }).promise().catch(() => {});
+        }
+        res.status(201).json({ success: true, message: 'Service created successfully', data: newService });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to create service', error: err.message });
+    }
+});
+
+app.get('/api/plans', async (_req, res) => {
+    try {
+        const plans = getPlans();
+        res.json({ success: true, count: plans.length, data: plans });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to retrieve plans', error: err.message });
+    }
+});
+
+app.post('/api/plans', async (req, res) => {
+    try {
+        const { name, theme, monthlyPrice, yearlyPrice, period, desc, badge, buttonText, features } = req.body;
+        if (!name) return res.status(400).json({ success: false, message: 'Plan name is required.' });
+
+        const currentPlans = getPlans();
+        const planId = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const newPlan = {
+            id: planId,
+            name: name.trim(),
+            theme: theme || 'standard',
+            monthlyPrice: monthlyPrice || 'Contact for Quote',
+            yearlyPrice: yearlyPrice || 'Contact for Quote',
+            period: period || '/ event',
+            desc: desc || '',
+            badge: badge || '',
+            buttonText: buttonText || 'Select Plan',
+            features: Array.isArray(features) ? features : [],
+        };
+
+        currentPlans.push(newPlan);
+        savePlans(currentPlans);
+        res.status(201).json({ success: true, message: 'Plan created successfully', data: newPlan });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to create plan', error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// Media Vault Direct Uploads
+// -------------------------------------------------------------
+app.get('/api/media', async (req, res) => {
+    try {
+        const { category, type } = req.query;
+        let items = [];
+        if (infrastructureReady) {
+            const result = await docClient.scan({ TableName: TABLE_NAME }).promise();
+            items = result.Items || [];
+        } else {
+            // Read local uploads
+            try {
+                const files = fs.readdirSync(UPLOADS_DIR);
+                items = files.map(f => ({
+                    id: f,
+                    fileName: f,
+                    url: `/uploads/${f}`,
+                    createdAt: new Date().toISOString()
+                }));
+            } catch {}
+        }
+
+        if (category && category !== 'All') {
+            items = items.filter(item => item.category?.toLowerCase() === category.toLowerCase());
+        }
+        if (type && type !== 'All') {
+            items = items.filter(item => item.type?.toLowerCase() === type.toLowerCase());
+        }
+        items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+        res.json({ success: true, count: items.length, data: items });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to fetch media records', error: err.message });
+    }
+});
+
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file provided.' });
+        }
+        const sanitized = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filename = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}-${sanitized}`;
+        let fileUrl = '';
+
+        if (infrastructureReady) {
+            try {
+                const s3Key = `uploads/${filename}`;
+                await s3.upload({
+                    Bucket: BUCKET_NAME,
+                    Key: s3Key,
+                    Body: req.file.buffer,
+                    ContentType: req.file.mimetype,
+                }).promise();
+                fileUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${s3Key}`;
+            } catch (s3Err) {
+                console.warn('[S3 Upload Notice]:', s3Err.message);
+            }
+        }
+
+        if (!fileUrl) {
+            const localDest = path.join(UPLOADS_DIR, filename);
+            fs.writeFileSync(localDest, req.file.buffer);
+            fileUrl = `/uploads/${filename}`;
+        }
+
+        res.json({
+            success: true,
+            fileUrl,
+            url: fileUrl,
+            fileName: filename,
+            mimeType: req.file.mimetype,
+            size: req.file.size
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'File upload failed.', error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// Server Initialization
+// -------------------------------------------------------------
 if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
     app.listen(PORT, async () => {
-        console.log(`=============================================`);
-        console.log(`🎧 Soundscape Server running on port ${PORT}`);
-        console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
-        console.log(`📁 Media API:    http://localhost:${PORT}/api/media`);
-        console.log(`=============================================`);
+        console.log(`=======================================================`);
+        console.log(`🎧 SS Audios Backend running on port ${PORT}`);
+        console.log(`🌐 Public Site Data: http://localhost:${PORT}/api/site-data`);
+        console.log(`🚀 Health Check:      http://localhost:${PORT}/api/health`);
+        console.log(`📍 City & Region:     ${BUSINESS_CONTACT.cityRegion}`);
+        console.log(`=======================================================`);
         try {
             await initAWSInfrastructure();
         } catch (e) {
-            console.warn('⚠️ AWS init notice:', e.message);
+            console.warn('AWS init notice:', e.message);
         }
     });
 }
 
-// Export the Express app for Vercel serverless functions
 module.exports = app;

@@ -1,88 +1,354 @@
 [
   {
     "id": 1,
+    "key": "wedding-events",
     "title": "Wedding Events",
-    "price": "₹35,000",
-    "category": "Grand Celebrations",
-    "tag": "Tour-Grade Audio",
-    "description": "Unforgettable Wedding Audio & Staging. Tour-grade sound systems, precision acoustic tuning, and ambient staging tailored to make every vow and song crystal clear.",
-    "image": "https://images.unsplash.com/photo-1597157639073-69284dc0fdaf?q=80&w=1174&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    "price": "₹25,000",
+    "startingPrice": 25000,
+    "priceLabel": "₹25,000",
+    "category": "SS Audios – Event & Entertainment",
+    "tag": "Wedding Production",
+    "summary": "Complete wedding audio engineering, grand bridal entries, and concert-grade reception soundscapes.",
+    "description": "From auspicious muhurtham acoustics to high-energy reception concerts, SS Audios designs seamless wedding audio, pathway lighting, and stage ambiance tailored to every ceremony.",
+    "image": "https://images.unsplash.com/photo-1597157639073-69284dc0fdaf?q=80&w=1174&auto=format&fit=crop",
     "features": [
-      "Precision Acoustic Tuning",
-      "Tour-Grade Wireless Sound",
-      "Ambient Staging & Lighting",
-      "Exclusive Sound Director"
+      "Crystal-clear speech & mantra amplification",
+      "Grand Bride & Groom Wedding Entry choreography cues",
+      "Hall & stage acoustic balancing for zero feedback",
+      "Dedicated on-site audio engineer throughout the ceremony"
     ],
-    "featuresStr": "Precision Acoustic Tuning\nTour-Grade Wireless Sound\nAmbient Staging & Lighting\nExclusive Sound Director"
+    "idealFor": "Weddings, Muhurthams, Grand Receptions & Sangeet Nights"
   },
   {
     "id": 2,
+    "key": "goldstar-orchestra",
     "title": "Goldstar Orchestra",
     "price": "₹25,000",
-    "category": "Live Orchestration",
-    "tag": "Multi-Genre",
-    "description": "Crafted live orchestral arrangements, high-energy beatmatching, and versatile multi-genre music curation designed to keep your celebration vibrant and unforgettable.",
+    "startingPrice": 25000,
+    "priceLabel": "₹25,000",
+    "category": "SS Audios – Event & Entertainment",
+    "tag": "Live Orchestration",
+    "summary": "Signature live orchestral band delivering Tamil cinema classics, retro medleys, and contemporary hits.",
+    "description": "Our flagship Goldstar Orchestra brings seasoned vocalists, live rhythmists, keyboardists, and acoustic instrumentalists backed by concert-calibrated SS Audios front-of-house sound.",
     "image": "https://images.unsplash.com/photo-1571266028243-3716f02d2d2e?auto=format&fit=crop&q=80&w=600",
     "features": [
-      "Live String & Brass Ensemble",
-      "Multi-Genre Song Curation",
-      "Dynamic Live Beatmatching"
-    ]
+      "Acclaimed male & female lead playback-style vocalists",
+      "Live multi-piece orchestra with custom song list planning",
+      "Full stage monitoring, wireless mics & live FOH mixing",
+      "Trusted across Erode, Mulanur, Modakurichi & Tamil Nadu"
+    ],
+    "idealFor": "Wedding Receptions, Cultural Galas & Family Celebrations"
   },
   {
     "id": 3,
+    "key": "lighting-audio",
     "title": "Lighting & Audio",
     "price": "₹40,000",
-    "category": "Atmospheric FX",
-    "tag": "Intelligent Lighting",
-    "description": "Intelligent Lighting & Crystal-Clear Sound. Dynamic moving heads, laser shows, and synchronized strobes paired with high-fidelity audio engineering and low-fog atmospheric effects.",
+    "startingPrice": 40000,
+    "priceLabel": "₹40,000",
+    "category": "SS Audios – Event & Entertainment",
+    "tag": "Atmospheric FX & Sound",
+    "summary": "Concert line-array audio rigs, architectural stage lighting, pathway beams, and LED visual walls.",
+    "description": "Full-scale technical production engineered for auditoriums, college fests, corporate summits, and grand marriage halls — uniting tour-grade PA arrays with synchronized DMX lighting.",
     "image": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=600",
     "features": [
-      "Moving Head Lasers & Strobes",
-      "Synchronized FX & Low-Fog",
-      "Hi-Fi Audio Engineering"
-    ]
+      "High-headroom line-array PA & dual-18 subwoofer stacks",
+      "DMX moving heads, stage washes, pathway lighting & haze FX",
+      "BG visuals, LED backdrop walls & custom stage trusses",
+      "Redundant power & audio patching with technical crew"
+    ],
+    "idealFor": "College Festivals, Corporate Summits, Concerts & Grand Halls"
   },
   {
     "id": 4,
+    "key": "welcome-dance",
     "title": "Welcome Dance",
     "price": "₹15,000",
-    "category": "Stage Choreography",
-    "tag": "Opening Act",
-    "description": "Vibrant Welcome Dance Performance. Electrifying choreography, custom entrance tracks, and synchronized stage pyrotechnics designed to set an unforgettable opening tone for your guests.",
+    "startingPrice": 15000,
+    "priceLabel": "₹15,000",
+    "category": "SS Audios – Event & Entertainment",
+    "tag": "Stage Choreography",
+    "summary": "Choreographed traditional & contemporary welcome troupes creating unforgettable guest arrivals.",
+    "description": "Set a celebratory tone from the very first step with synchronized welcome dance troupes, Bride & Groom pathway processions, cold pyro sparks, and custom rhythmic soundtracks.",
     "image": "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
     "features": [
-      "Custom Entrance Tracks",
-      "Synchronized Stage Pyros",
-      "Electrifying Choreography"
-    ]
+      "Bride & Groom royal entrance choreography",
+      "Classical, folk & contemporary fusion welcome ensembles",
+      "Synchronized pathway lighting & percussive cue tracks",
+      "Costume-coordinated performers matched to venue palette"
+    ],
+    "idealFor": "Bride & Groom Entries, VIP Processions & Inaugurations"
   },
   {
     "id": 5,
+    "key": "dj-events",
     "title": "DJ Events",
-    "price": "Starting from ₹15,000",
-    "category": "Club & Festival",
-    "tag": "Live Stem Remixing",
-    "description": "Electrifying DJ Events & Festival Beats. Festival-grade audio systems, seamless live stem mixing, and real-time visual synchronization designed to keep your dance floor packed all night.",
+    "price": "₹15,000 onwards",
+    "startingPrice": 15000,
+    "priceLabel": "₹15,000 onwards",
+    "category": "SS Audios – Event & Entertainment",
+    "tag": "DJ Experience",
+    "summary": "High-octane live DJ performances with custom remixes, club-grade sub-bass, and synchronized FX.",
+    "description": "Turn receptions, sangeet nights, college culturals, and after-parties into packed dance floors with live mixing, Tamil/Hindi/EDM mashups, MC hosting, and kinetic lighting.",
     "image": "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=600",
     "features": [
-      "Real-Time Stem Mixing",
-      "Festival-Grade Sound Array",
-      "Synchronized Visuals"
-    ]
+      "Live DJ booth with pro Pioneer CDJ / controller rig",
+      "Custom playlist curation & live crowd-reading transitions",
+      "Dynamic moving-head beams, fog/haze & visual projection",
+      "Wireless MC hosting & interactive floor engagement"
+    ],
+    "idealFor": "Sangeet Nights, Reception After-Parties, College Fests & Clubs"
   },
   {
     "id": 6,
+    "key": "instrumentals",
     "title": "Instrumentals",
     "price": "₹10,000",
-    "category": "Acoustic Solo & Band",
-    "tag": "Soulful Live",
-    "description": "Mesmerizing Instrumental Performances. Soulful live solos and ensemble arrangements spanning violin, flute, saxophone, and classical instruments for an elegant, immersive ambiance.",
+    "startingPrice": 10000,
+    "priceLabel": "₹10,000",
+    "category": "SS Audios – Event & Entertainment",
+    "tag": "Acoustic Solo & Band",
+    "summary": "Soulful live percussion, drums, violin, flute, and classical instrumental ensembles.",
+    "description": "Elevate intimate dinners, traditional ceremonies, and reception arrivals with live acoustic artistry — from high-energy stage drums to serene Carnatic flute, violin, and tabla.",
     "image": "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&q=80&w=600",
     "features": [
-      "Violin, Sax & Flute Solos",
-      "Ensemble Arrangements",
-      "Immersive Classical Ambiance"
+      "Live concert drums, percussion jams & classical solos",
+      "Bansuri flute, violin, keyboard & tabla ensembles",
+      "Studio-grade instrument miking & warm acoustic mix",
+      "Flexible solo, duo, or full ensemble lineups"
+    ],
+    "idealFor": "Ceremonies, Cocktail Dinners, Temple Events & Stage Openers"
+  },
+  {
+    "id": 7,
+    "key": "plug-and-play",
+    "title": "Plug & Play",
+    "price": "₹1,500/hour",
+    "startingPrice": 1500,
+    "priceValue": 1500,
+    "unit": "hour",
+    "priceLabel": "₹1,500/hour",
+    "category": "Raga Studio",
+    "tag": "Jam Room Rehearsal",
+    "description": "Step into an acoustically treated rehearsal and jamming space stocked with professional backline amps, drum kit, keyboards, and PA monitoring.",
+    "image": "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Acoustically calibrated jam room",
+      "Pro PA monitors & mixer",
+      "Band & solo practice ready"
+    ]
+  },
+  {
+    "id": 8,
+    "key": "live-tracks",
+    "title": "Live Tracks",
+    "price": "₹3,500/session",
+    "startingPrice": 3500,
+    "priceValue": 3500,
+    "unit": "session",
+    "priceLabel": "₹3,500/session",
+    "category": "Raga Studio",
+    "tag": "Multi-Track Recording",
+    "description": "Multi-track live instrument and vocal session recording captured through high-headroom preamps and studio condenser microphones.",
+    "image": "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Isolated multi-track capture",
+      "Dedicated recording engineer",
+      "Uncompressed 24-bit WAV stems"
+    ]
+  },
+  {
+    "id": 9,
+    "key": "vocal-training",
+    "title": "Vocal Training",
+    "price": "₹2,000/hour",
+    "startingPrice": 2000,
+    "priceValue": 2000,
+    "unit": "hour",
+    "priceLabel": "₹2,000/hour",
+    "category": "Raga Studio",
+    "tag": "Mic Technique Coaching",
+    "description": "Studio mic coaching focused on breath discipline, pitch accuracy, tonal placement, and playback-ready studio vocal delivery.",
+    "image": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Condenser mic technique coaching",
+      "Live pitch & phrasing feedback",
+      "Take-home reference recording"
+    ]
+  },
+  {
+    "id": 10,
+    "key": "karaoke-singing",
+    "title": "Karaoke Singing",
+    "price": "₹1,200/hour",
+    "startingPrice": 1200,
+    "priceValue": 1200,
+    "unit": "hour",
+    "priceLabel": "₹1,200/hour",
+    "category": "Raga Studio",
+    "tag": "Cover Track Recording",
+    "description": "Record your favourite cinema or devotional tracks over studio-quality karaoke backing tracks with polished vocal balance.",
+    "image": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Curated high-fidelity backing tracks",
+      "Warm vocal reverb & EQ polish",
+      "Mastered MP3/WAV export"
+    ]
+  },
+  {
+    "id": 11,
+    "key": "music-production",
+    "title": "Music Production",
+    "price": "₹8,000/project",
+    "startingPrice": 8000,
+    "priceValue": 8000,
+    "unit": "project",
+    "priceLabel": "₹8,000/project",
+    "category": "Raga Studio",
+    "tag": "Original Scoring & Arranging",
+    "description": "End-to-end original composition, arrangement, programming, live instrument overdubs, mixing, and streaming-ready mastering.",
+    "image": "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Original arrangement & sound design",
+      "Live acoustic & synth layers",
+      "Streaming & broadcast master"
+    ]
+  },
+  {
+    "id": 12,
+    "key": "voice-mixing",
+    "title": "Voice Mixing",
+    "price": "₹2,500/track",
+    "startingPrice": 2500,
+    "priceValue": 2500,
+    "unit": "track",
+    "priceLabel": "₹2,500/track",
+    "category": "Raga Studio",
+    "tag": "Vocal Restoration & Mastering",
+    "description": "Precision vocal editing, timing alignment, noise cleanup, analog-modeled compression, and stereo mastering for singles and voiceovers.",
+    "image": "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Breath & noise restoration",
+      "Harmonic EQ & dynamics polish",
+      "Radio & YouTube loudness spec"
+    ]
+  },
+  {
+    "id": 13,
+    "key": "greenmate-video-suite",
+    "title": "Greenmate Video Suite",
+    "price": "₹2,500/hour",
+    "startingPrice": 2500,
+    "priceValue": 2500,
+    "unit": "hour",
+    "priceLabel": "₹2,500/hour",
+    "category": "Raga Studio",
+    "tag": "Chroma Key Video Shoot",
+    "description": "Full chroma-key green screen video suite equipped with key/fill softbox lighting and synced studio audio capture.",
+    "image": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Evenly lit chroma-key backdrop",
+      "Synced broadcast-grade audio",
+      "Ideal for music videos & courses"
+    ]
+  },
+  {
+    "id": 14,
+    "key": "youtubers-studio",
+    "title": "YouTubers Studio",
+    "price": "₹1,800/hour",
+    "startingPrice": 1800,
+    "priceValue": 1800,
+    "unit": "hour",
+    "priceLabel": "₹1,800/hour",
+    "category": "Raga Studio",
+    "tag": "Content Creation Desk",
+    "description": "Turnkey creator workspace for podcasts, video interviews, acoustic covers, and high-clarity talking-head channels.",
+    "image": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Multi-mic podcast desk setup",
+      "Clean acoustic backdrop & lighting",
+      "Fast turnaround audio/video capture"
+    ]
+  },
+  {
+    "id": 15,
+    "key": "vocal-mastery",
+    "title": "Vocal Mastery & Singing",
+    "price": "₹3,500/month",
+    "startingPrice": 3500,
+    "feeMonthly": 3500,
+    "feeLabel": "₹3,500/month",
+    "duration": "3–6 months",
+    "category": "Sampoorna Music Academy",
+    "tag": "Carnatic, Film & Western",
+    "description": "Structured vocal artistry spanning Classical, Semi-Classical, Film, and Devotional repertoire with live studio microphone practice.",
+    "image": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Classical, Semi-Classical, Film & Devotional",
+      "Breath control and pitch accuracy",
+      "Live mic singing",
+      "Stage confidence"
+    ]
+  },
+  {
+    "id": 16,
+    "key": "keyboard-synthesizer",
+    "title": "Keyboard & Synthesizer",
+    "price": "₹3,500/month",
+    "startingPrice": 3500,
+    "feeMonthly": 3500,
+    "feeLabel": "₹3,500/month",
+    "duration": "3–6 months",
+    "category": "Sampoorna Music Academy",
+    "tag": "Keyboard & Piano",
+    "description": "Master contemporary keyboard accompaniment and lead synthesis combining Western harmonic theory with Indian melodic phrasing.",
+    "image": "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Western chord theory",
+      "Indian ragas on keys",
+      "Finger dexterity",
+      "Synthesizer sound design"
+    ]
+  },
+  {
+    "id": 17,
+    "key": "flute-bansuri",
+    "title": "Flute & Bansuri",
+    "price": "₹3,000/month",
+    "startingPrice": 3000,
+    "feeMonthly": 3000,
+    "feeLabel": "₹3,000/month",
+    "duration": "3–6 months",
+    "category": "Sampoorna Music Academy",
+    "tag": "Traditional Bansuri",
+    "description": "Develop warm bamboo tone production, breath control, classical ragas, and expressive film melodies under performing maestros.",
+    "image": "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Embouchure techniques",
+      "Finger-hole coverage",
+      "Classical ragas",
+      "Film melodies"
+    ]
+  },
+  {
+    "id": 18,
+    "key": "tabla-percussion",
+    "title": "Tabla & Indian Percussion",
+    "price": "₹3,000/month",
+    "startingPrice": 3000,
+    "feeMonthly": 3000,
+    "feeLabel": "₹3,000/month",
+    "duration": "3–6 months",
+    "category": "Sampoorna Music Academy",
+    "tag": "Rhythm & Taal",
+    "description": "Build rock-solid rhythmic fluency through traditional taal structures, crisp bol articulation, and real-time stage accompaniment.",
+    "image": "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&q=80&w=600",
+    "features": [
+      "Rhythm cycles and Taals",
+      "Bol recitations",
+      "Finger speed",
+      "Live stage accompaniment"
     ]
   }
 ]
