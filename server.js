@@ -218,7 +218,7 @@ async function initAWSInfrastructure() {
                         cat.slots.forEach(slot => {
                             const s3Media = s3MediaMap.get(slot.id);
                             if (s3Media) {
-                                slot.videoUrl = `/api/media/${slot.id}/${s3Media.filename}`;
+                                slot.videoUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/portfolio/${slot.id}/${s3Media.filename}`;
                                 slot.status = 'published';
                                 slot.mimeType = 'video/mp4';
                                 slot.fileSizeBytes = s3Media.size;
@@ -610,8 +610,8 @@ app.get('/api/site-data', (_req, res) => {
     res.json(buildPublicPayload());
 });
 
-// 3. Media & Video Streaming with HTTP 206 Partial Content (Local disk & S3 Vault Fallback)
-app.get('/api/media/:slotId/:filename', async (req, res) => {
+// 3. Media & Video Streaming: Local disk stream or Direct 302 Redirect to AWS S3 High-Speed Vault
+app.get('/api/media/:slotId/:filename', (req, res) => {
     const safeSlot = sanitizeSafeSegment(req.params.slotId);
     const safeFile = sanitizeSafeSegment(req.params.filename);
     const filePath = resolveConfinedPath(VIDEOS_DIR, safeSlot, safeFile);
@@ -626,74 +626,16 @@ app.get('/api/media/:slotId/:filename', async (req, res) => {
         return streamLocalFile(uploadFallback, req, res);
     }
 
-    // Fallback to AWS S3 media vault stream
-    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-        try {
-            const s3Key = `portfolio/${safeSlot}/${safeFile}`;
-            let head = null;
-            try {
-                head = await s3.headObject({ Bucket: BUCKET_NAME, Key: s3Key }).promise();
-                return streamS3Object(s3Key, head, req, res);
-            } catch (err) {
-                // If specific filename mismatch, find the slot's file in S3
-                const listRes = await s3.listObjectsV2({ Bucket: BUCKET_NAME, Prefix: `portfolio/${safeSlot}/` }).promise();
-                if (listRes.Contents && listRes.Contents.length > 0) {
-                    const latest = listRes.Contents.sort((a, b) => b.LastModified - a.LastModified)[0];
-                    head = await s3.headObject({ Bucket: BUCKET_NAME, Key: latest.Key }).promise();
-                    return streamS3Object(latest.Key, head, req, res);
-                }
-            }
-        } catch (s3Err) {
-            console.warn(`[S3 Media Stream Notice for ${safeSlot}/${safeFile}]:`, s3Err.message);
-        }
-    }
-
-    return res.status(404).json({ error: 'Media file not found.' });
+    // Direct 302 Redirect to public high-speed AWS S3 CDN
+    const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/portfolio/${safeSlot}/${safeFile}`;
+    return res.redirect(302, s3Url);
 });
 
-function streamS3Object(s3Key, head, req, res) {
-    const fileSize = head.ContentLength;
-    const ext = path.extname(s3Key).toLowerCase();
-    const contentType = head.ContentType || (
-        ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
-        ext === '.png' ? 'image/png' :
-        ext === '.webp' ? 'image/webp' :
-        ext === '.webm' ? 'video/webm' :
-        ext === '.mov' ? 'video/quicktime' :
-        ext === '.mp3' ? 'audio/mpeg' :
-        ext === '.wav' ? 'audio/wav' : 'video/mp4'
-    );
-
-    const range = req.headers.range;
-    if (range) {
-        const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-        if (!match) {
-            return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
-        }
-        const start = match[1] ? Number.parseInt(match[1], 10) : 0;
-        const end = match[2] ? Math.min(Number.parseInt(match[2], 10), fileSize - 1) : fileSize - 1;
-        if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= fileSize) {
-            return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
-        }
-        const chunkSize = end - start + 1;
-        res.writeHead(206, {
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': chunkSize,
-            'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=86400',
-        });
-        s3.getObject({ Bucket: BUCKET_NAME, Key: s3Key, Range: `bytes=${start}-${end}` }).createReadStream().pipe(res);
-    } else {
-        res.writeHead(200, {
-            'Content-Length': fileSize,
-            'Content-Type': contentType,
-            'Accept-Ranges': 'bytes',
-            'Cache-Control': 'public, max-age=86400',
-        });
-        s3.getObject({ Bucket: BUCKET_NAME, Key: s3Key }).createReadStream().pipe(res);
-    }
-}
+// Legacy streaming endpoint (for existing Soundscape S3 assets)
+app.get('/api/media/stream/:id', (req, res) => {
+    const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${req.params.id}`;
+    return res.redirect(302, s3Url);
+});
 
 function streamLocalFile(filePath, req, res) {
     const stat = fs.statSync(filePath);
@@ -746,42 +688,6 @@ function streamLocalFile(filePath, req, res) {
         fs.createReadStream(filePath).pipe(res);
     }
 }
-
-// Legacy streaming endpoint (for existing Soundscape S3 assets)
-app.get('/api/media/stream/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const headParams = { Bucket: BUCKET_NAME, Key: id };
-        const metadata = await s3.headObject(headParams).promise();
-        const fileSize = metadata.ContentLength;
-        const contentType = metadata.ContentType || 'video/mp4';
-        const range = req.headers.range;
-
-        if (range) {
-            const parts = range.replace(/bytes=/, "").split("-");
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-            const chunksize = (end - start) + 1;
-
-            res.writeHead(206, {
-                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Length': chunksize,
-                'Content-Type': contentType,
-            });
-            s3.getObject({ Bucket: BUCKET_NAME, Key: id, Range: `bytes=${start}-${end}` }).createReadStream().pipe(res);
-        } else {
-            res.writeHead(200, {
-                'Content-Length': fileSize,
-                'Content-Type': contentType,
-                'Accept-Ranges': 'bytes'
-            });
-            s3.getObject(headParams).createReadStream().pipe(res);
-        }
-    } catch (err) {
-        res.status(404).send('File not found in S3');
-    }
-});
 
 // -------------------------------------------------------------
 // Admin Authentication Routes
@@ -1231,7 +1137,8 @@ app.post('/api/admin/uploads/:uploadId/complete', requireAdminAuth, async (req, 
     activeUploads.delete(session.uploadId);
 
     const finalStat = fs.existsSync(finalPath) ? fs.statSync(finalPath) : { size: session.totalSize };
-    found.slot.videoUrl = `/api/media/${safeSlot}/${session.fileName}`;
+    const directS3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/portfolio/${safeSlot}/${session.fileName}`;
+    found.slot.videoUrl = infrastructureReady ? directS3Url : `/api/media/${safeSlot}/${session.fileName}`;
     found.slot.posterUrl = null;
     found.slot.status = 'published';
     found.slot.mimeType = session.mimeType;
