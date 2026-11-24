@@ -171,6 +171,69 @@ async function initAWSInfrastructure() {
             }
         }
         infrastructureReady = true;
+
+        // 1. Restore store state from DynamoDB if available
+        try {
+            const ddbRes = await docClient.get({
+                TableName: STORE_TABLE_NAME,
+                Key: { id: 'ss_audios_store_v1' }
+            }).promise();
+            if (ddbRes.Item && ddbRes.Item.payload) {
+                const persisted = JSON.parse(ddbRes.Item.payload);
+                if (persisted && Array.isArray(persisted.portfolioCategories)) {
+                    store = { ...store, ...persisted };
+                    console.log('✅ [DynamoDB] Loaded store state from DynamoDB.');
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ [DynamoDB Load Notice]:', e.message);
+        }
+
+        // 2. Auto-sync with S3 portfolio media objects so no uploaded videos are ever missed
+        try {
+            console.log('🔍 [S3 Vault] Scanning S3 bucket for portfolio media files...');
+            let continuationToken = null;
+            const s3MediaMap = new Map();
+            do {
+                const listParams = { Bucket: BUCKET_NAME, Prefix: 'portfolio/' };
+                if (continuationToken) listParams.ContinuationToken = continuationToken;
+                const s3Objects = await s3.listObjectsV2(listParams).promise();
+                (s3Objects.Contents || []).forEach(item => {
+                    const parts = item.Key.split('/');
+                    if (parts.length >= 3) {
+                        const slotId = parts[1];
+                        const filename = parts.slice(2).join('/');
+                        if (!s3MediaMap.has(slotId) || item.LastModified > s3MediaMap.get(slotId).lastModified) {
+                            s3MediaMap.set(slotId, { filename, size: item.Size, lastModified: item.LastModified });
+                        }
+                    }
+                });
+                continuationToken = s3Objects.IsTruncated ? s3Objects.NextContinuationToken : null;
+            } while (continuationToken);
+
+            let syncCount = 0;
+            if (Array.isArray(store.portfolioCategories)) {
+                store.portfolioCategories.forEach(cat => {
+                    if (Array.isArray(cat.slots)) {
+                        cat.slots.forEach(slot => {
+                            const s3Media = s3MediaMap.get(slot.id);
+                            if (s3Media) {
+                                slot.videoUrl = `/api/media/${slot.id}/${s3Media.filename}`;
+                                slot.status = 'published';
+                                slot.mimeType = 'video/mp4';
+                                slot.fileSizeBytes = s3Media.size;
+                                slot.updatedAt = s3Media.lastModified && s3Media.lastModified.toISOString ? s3Media.lastModified.toISOString() : new Date().toISOString();
+                                syncCount++;
+                            }
+                        });
+                    }
+                });
+            }
+            console.log(`✅ [S3 Vault] Synced ${syncCount} portfolio slots directly from S3 media vault.`);
+            saveStore(store);
+        } catch (s3SyncErr) {
+            console.warn('⚠️ [S3 Vault Sync Notice]:', s3SyncErr.message);
+        }
     } catch (infraErr) {
         console.warn('⚠️ AWS initialization notice:', infraErr.message);
     }
@@ -547,23 +610,90 @@ app.get('/api/site-data', (_req, res) => {
     res.json(buildPublicPayload());
 });
 
-// 3. Media & Video Streaming with HTTP 206 Partial Content
-app.get('/api/media/:slotId/:filename', (req, res) => {
+// 3. Media & Video Streaming with HTTP 206 Partial Content (Local disk & S3 Vault Fallback)
+app.get('/api/media/:slotId/:filename', async (req, res) => {
     const safeSlot = sanitizeSafeSegment(req.params.slotId);
     const safeFile = sanitizeSafeSegment(req.params.filename);
     const filePath = resolveConfinedPath(VIDEOS_DIR, safeSlot, safeFile);
 
-    if (!filePath || !fs.existsSync(filePath)) {
-        // Fallback check in uploads directory
-        const uploadFallback = resolveConfinedPath(UPLOADS_DIR, safeFile);
-        if (uploadFallback && fs.existsSync(uploadFallback)) {
-            return streamLocalFile(uploadFallback, req, res);
-        }
-        return res.status(404).json({ error: 'Media file not found.' });
+    if (filePath && fs.existsSync(filePath)) {
+        return streamLocalFile(filePath, req, res);
     }
 
-    streamLocalFile(filePath, req, res);
+    // Fallback check in uploads directory
+    const uploadFallback = resolveConfinedPath(UPLOADS_DIR, safeFile);
+    if (uploadFallback && fs.existsSync(uploadFallback)) {
+        return streamLocalFile(uploadFallback, req, res);
+    }
+
+    // Fallback to AWS S3 media vault stream
+    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+        try {
+            const s3Key = `portfolio/${safeSlot}/${safeFile}`;
+            let head = null;
+            try {
+                head = await s3.headObject({ Bucket: BUCKET_NAME, Key: s3Key }).promise();
+                return streamS3Object(s3Key, head, req, res);
+            } catch (err) {
+                // If specific filename mismatch, find the slot's file in S3
+                const listRes = await s3.listObjectsV2({ Bucket: BUCKET_NAME, Prefix: `portfolio/${safeSlot}/` }).promise();
+                if (listRes.Contents && listRes.Contents.length > 0) {
+                    const latest = listRes.Contents.sort((a, b) => b.LastModified - a.LastModified)[0];
+                    head = await s3.headObject({ Bucket: BUCKET_NAME, Key: latest.Key }).promise();
+                    return streamS3Object(latest.Key, head, req, res);
+                }
+            }
+        } catch (s3Err) {
+            console.warn(`[S3 Media Stream Notice for ${safeSlot}/${safeFile}]:`, s3Err.message);
+        }
+    }
+
+    return res.status(404).json({ error: 'Media file not found.' });
 });
+
+function streamS3Object(s3Key, head, req, res) {
+    const fileSize = head.ContentLength;
+    const ext = path.extname(s3Key).toLowerCase();
+    const contentType = head.ContentType || (
+        ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
+        ext === '.png' ? 'image/png' :
+        ext === '.webp' ? 'image/webp' :
+        ext === '.webm' ? 'video/webm' :
+        ext === '.mov' ? 'video/quicktime' :
+        ext === '.mp3' ? 'audio/mpeg' :
+        ext === '.wav' ? 'audio/wav' : 'video/mp4'
+    );
+
+    const range = req.headers.range;
+    if (range) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+        if (!match) {
+            return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
+        }
+        const start = match[1] ? Number.parseInt(match[1], 10) : 0;
+        const end = match[2] ? Math.min(Number.parseInt(match[2], 10), fileSize - 1) : fileSize - 1;
+        if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= fileSize) {
+            return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
+        }
+        const chunkSize = end - start + 1;
+        res.writeHead(206, {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunkSize,
+            'Content-Type': contentType,
+            'Cache-Control': 'public, max-age=86400',
+        });
+        s3.getObject({ Bucket: BUCKET_NAME, Key: s3Key, Range: `bytes=${start}-${end}` }).createReadStream().pipe(res);
+    } else {
+        res.writeHead(200, {
+            'Content-Length': fileSize,
+            'Content-Type': contentType,
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'public, max-age=86400',
+        });
+        s3.getObject({ Bucket: BUCKET_NAME, Key: s3Key }).createReadStream().pipe(res);
+    }
+}
 
 function streamLocalFile(filePath, req, res) {
     const stat = fs.statSync(filePath);
