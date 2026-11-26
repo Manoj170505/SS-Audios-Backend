@@ -229,7 +229,23 @@ async function initAWSInfrastructure() {
                     }
                 });
             }
-            console.log(`✅ [S3 Vault] Synced ${syncCount} portfolio slots directly from S3 media vault.`);
+            if (Array.isArray(store.djPackages)) {
+                store.djPackages.forEach(pkg => {
+                    ensurePackageSlots(pkg);
+                    pkg.slots.forEach(slot => {
+                        const s3Media = s3MediaMap.get(slot.id);
+                        if (s3Media) {
+                            slot.videoUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/portfolio/${slot.id}/${s3Media.filename}`;
+                            slot.status = 'published';
+                            slot.mimeType = 'video/mp4';
+                            slot.fileSizeBytes = s3Media.size;
+                            slot.updatedAt = s3Media.lastModified && s3Media.lastModified.toISOString ? s3Media.lastModified.toISOString() : new Date().toISOString();
+                            syncCount++;
+                        }
+                    });
+                });
+            }
+            console.log(`✅ [S3 Vault] Synced ${syncCount} slots directly from S3 media vault.`);
             saveStore(store);
         } catch (s3SyncErr) {
             console.warn('⚠️ [S3 Vault Sync Notice]:', s3SyncErr.message);
@@ -358,7 +374,7 @@ function requireAdminAuth(req, res, next) {
 // -------------------------------------------------------------
 // Data Persistence: Store, Services, Plans, Inquiries
 // -------------------------------------------------------------
-function computeStorageStats(categories) {
+function computeStorageStats(categories, packages = []) {
     let usedBytes = 0;
     let publishedCount = 0;
     let totalSlots = 0;
@@ -367,6 +383,20 @@ function computeStorageStats(categories) {
         for (const cat of categories) {
             if (Array.isArray(cat.slots)) {
                 for (const slot of cat.slots) {
+                    totalSlots += 1;
+                    if (slot.status === 'published' && slot.videoUrl) {
+                        publishedCount += 1;
+                        usedBytes += Math.max(0, slot.fileSizeBytes || 0);
+                    }
+                }
+            }
+        }
+    }
+
+    if (Array.isArray(packages)) {
+        for (const pkg of packages) {
+            if (Array.isArray(pkg.slots)) {
+                for (const slot of pkg.slots) {
                     totalSlots += 1;
                     if (slot.status === 'published' && slot.videoUrl) {
                         publishedCount += 1;
@@ -391,12 +421,51 @@ function computeStorageStats(categories) {
     };
 }
 
+function ensurePackageSlots(pkg) {
+    if (!pkg) return [];
+    if (!Array.isArray(pkg.slots)) pkg.slots = [];
+    const prefix = String(pkg.id || 'package').toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const tagPrefix = String(pkg.name || 'DJ').slice(0, 3).toUpperCase();
+    for (let i = 1; i <= 10; i++) {
+        const pad = String(i).padStart(2, '0');
+        const slotId = `dj-pack-${prefix}-slot-${pad}`;
+        let existing = pkg.slots.find(s => s.id === slotId || s.slotNumber === i);
+        if (!existing) {
+            pkg.slots.push({
+                id: slotId,
+                categoryId: `dj-pack-${prefix}`,
+                slotNumber: i,
+                title: `${pkg.name} Performance ${pad}`,
+                archiveTag: `${tagPrefix}-${pad}`,
+                location: 'Erode & Tamil Nadu',
+                status: 'awaiting',
+                videoUrl: null,
+                posterUrl: null,
+                mimeType: null,
+                fileSizeBytes: 0,
+                updatedAt: null,
+                hidden: false
+            });
+        } else {
+            if (!existing.id) existing.id = slotId;
+            if (!existing.categoryId) existing.categoryId = `dj-pack-${prefix}`;
+            if (!existing.slotNumber) existing.slotNumber = i;
+            if (!existing.title) existing.title = `${pkg.name} Performance ${pad}`;
+            if (!existing.archiveTag) existing.archiveTag = `${tagPrefix}-${pad}`;
+            if (typeof existing.hidden !== 'boolean') existing.hidden = false;
+        }
+    }
+    pkg.slots = pkg.slots.slice(0, 10);
+    return pkg.slots;
+}
+
 function loadStore() {
     try {
         if (fs.existsSync(STORE_FILE)) {
             const raw = fs.readFileSync(STORE_FILE, 'utf8');
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed.djPackages) && Array.isArray(parsed.portfolioCategories)) {
+                parsed.djPackages.forEach(p => ensurePackageSlots(p));
                 return parsed;
             }
         }
@@ -444,24 +513,43 @@ function saveStore(data) {
 function buildPublicPayload() {
     return {
         currency: store.currency || 'INR',
-        djPackages: store.djPackages || [],
+        djPackages: (store.djPackages || []).map(p => {
+            ensurePackageSlots(p);
+            return p;
+        }),
         signatureServices: store.signatureServices || [],
         ragaStudioServices: store.ragaStudioServices || [],
         academyCourses: store.academyCourses || [],
         sectionVisibility: store.sectionVisibility || { services: true, portfolio: true, djPackages: true, ragaStudio: true, sampoornaAcademy: true },
         portfolioCategories: store.portfolioCategories || [],
-        storageStats: computeStorageStats(store.portfolioCategories),
+        storageStats: computeStorageStats(store.portfolioCategories, store.djPackages),
         ownerEmailHint: OWNER_EMAIL,
         updatedAt: store.updatedAt || new Date().toISOString(),
     };
 }
 
 function findSlot(slotId) {
-    if (!Array.isArray(store.portfolioCategories)) return null;
-    for (const category of store.portfolioCategories) {
-        if (Array.isArray(category.slots)) {
-            const slot = category.slots.find(s => s.id === slotId);
-            if (slot) return { category, slot };
+    if (Array.isArray(store.portfolioCategories)) {
+        for (const category of store.portfolioCategories) {
+            if (Array.isArray(category.slots)) {
+                const slot = category.slots.find(s => s.id === slotId);
+                if (slot) return { category, slot, type: 'portfolio' };
+            }
+        }
+    }
+    if (Array.isArray(store.djPackages)) {
+        for (const pkg of store.djPackages) {
+            if (Array.isArray(pkg.slots)) {
+                const slot = pkg.slots.find(s => s.id === slotId);
+                if (slot) {
+                    return {
+                        category: { id: `dj-pack-${pkg.id}`, name: `${pkg.name} Package`, slots: pkg.slots },
+                        package: pkg,
+                        slot,
+                        type: 'djPackage'
+                    };
+                }
+            }
         }
     }
     return null;
@@ -798,6 +886,7 @@ app.put('/api/admin/dj-packages', requireAdminAuth, (req, res) => {
             unitLabel: typeof item?.unitLabel === 'string' && item.unitLabel.trim() ? item.unitLabel.trim().slice(0, 24) : (base.unitLabel || '/ event'),
             features: Array.isArray(item?.features) ? item.features.map(f => String(f).trim()).filter(Boolean).slice(0, 12) : (base.features || []),
             hidden: Boolean(item?.hidden),
+            slots: Array.isArray(base.slots) ? base.slots : ensurePackageSlots(base),
         });
     }
 
@@ -849,6 +938,7 @@ app.put('/api/admin/catalog', requireAdminAuth, (req, res) => {
                 unitLabel: typeof item?.unitLabel === 'string' && item.unitLabel.trim() ? item.unitLabel.trim().slice(0, 24) : base.unitLabel,
                 features: Array.isArray(item?.features) ? item.features.map(f => String(f).trim()).filter(Boolean).slice(0, 12) : base.features,
                 hidden: Boolean(item?.hidden),
+                slots: Array.isArray(base.slots) ? base.slots : ensurePackageSlots(base),
             });
         }
         store.djPackages = nextDj;
@@ -942,9 +1032,17 @@ app.put('/api/admin/catalog', requireAdminAuth, (req, res) => {
 // Admin Portfolio & Resumable Upload Routes
 // -------------------------------------------------------------
 app.patch('/api/admin/portfolio-categories/:categoryId', requireAdminAuth, (req, res) => {
-    const category = store.portfolioCategories.find(c => c.id === req.params.categoryId);
+    let category = store.portfolioCategories.find(c => c.id === req.params.categoryId);
+    if (!category && req.params.categoryId.startsWith('dj-pack-')) {
+        const pkgId = req.params.categoryId.replace('dj-pack-', '');
+        const pkg = store.djPackages.find(p => p.id === pkgId);
+        if (pkg) {
+            ensurePackageSlots(pkg);
+            category = pkg;
+        }
+    }
     if (!category) {
-        return res.status(404).json({ error: 'Portfolio category not found.' });
+        return res.status(404).json({ error: 'Portfolio category or DJ package not found.' });
     }
 
     if (typeof req.body?.hidden === 'boolean') {
@@ -952,20 +1050,22 @@ app.patch('/api/admin/portfolio-categories/:categoryId', requireAdminAuth, (req,
     }
 
     const slotAction = req.body?.slotAction;
-    if (slotAction === 'hide-empty') {
-        for (const slot of category.slots) {
-            if (slot.status !== 'published' || !slot.videoUrl) {
+    if (Array.isArray(category.slots)) {
+        if (slotAction === 'hide-empty') {
+            for (const slot of category.slots) {
+                if (slot.status !== 'published' || !slot.videoUrl) {
+                    slot.hidden = true;
+                }
+            }
+        } else if (slotAction === 'show-all') {
+            category.hidden = false;
+            for (const slot of category.slots) {
+                slot.hidden = false;
+            }
+        } else if (slotAction === 'hide-all') {
+            for (const slot of category.slots) {
                 slot.hidden = true;
             }
-        }
-    } else if (slotAction === 'show-all') {
-        category.hidden = false;
-        for (const slot of category.slots) {
-            slot.hidden = false;
-        }
-    } else if (slotAction === 'hide-all') {
-        for (const slot of category.slots) {
-            slot.hidden = true;
         }
     }
 
