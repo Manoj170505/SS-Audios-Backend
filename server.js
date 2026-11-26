@@ -539,6 +539,7 @@ function findSlot(slotId) {
     }
     if (Array.isArray(store.djPackages)) {
         for (const pkg of store.djPackages) {
+            ensurePackageSlots(pkg);
             if (Array.isArray(pkg.slots)) {
                 const slot = pkg.slots.find(s => s.id === slotId);
                 if (slot) {
@@ -1033,9 +1034,12 @@ app.put('/api/admin/catalog', requireAdminAuth, (req, res) => {
 // -------------------------------------------------------------
 app.patch('/api/admin/portfolio-categories/:categoryId', requireAdminAuth, (req, res) => {
     let category = store.portfolioCategories.find(c => c.id === req.params.categoryId);
-    if (!category && req.params.categoryId.startsWith('dj-pack-')) {
-        const pkgId = req.params.categoryId.replace('dj-pack-', '');
-        const pkg = store.djPackages.find(p => p.id === pkgId);
+    let pkg = null;
+    if (!category) {
+        const pkgId = req.params.categoryId.startsWith('dj-pack-')
+            ? req.params.categoryId.replace('dj-pack-', '')
+            : req.params.categoryId;
+        pkg = store.djPackages.find(p => p.id === pkgId);
         if (pkg) {
             ensurePackageSlots(pkg);
             category = pkg;
